@@ -6,6 +6,8 @@ import queue
 import threading
 from flask import Flask, Response
 from elevenlabs import ElevenLabs, RealtimeEvents, RealtimeUrlOptions
+from elevenlabs import AudioFormat, CommitStrategy, ElevenLabs, RealtimeAudioOptions
+
 
 load_dotenv()
 
@@ -58,16 +60,21 @@ async def main():
     connection = await elevenlabs.speech_to_text.realtime.connect(RealtimeUrlOptions(
         model_id="scribe_v2_realtime",
         url="http://localhost:30000/stream",
+        commit_strategy=CommitStrategy.VAD,
+        vad_silence_threshold_secs=1.5,
+        vad_threshold=0.4,
+        min_speech_duration_ms=100,
+        min_silence_duration_ms=100,
         include_timestamps=True,
     ))
 
     def on_session_started(data):
         print(f"Session started: {data}")
 
-    def on_partial_transcript(data):
-        text = data.get("text", "")
-        print(f"Partial: {text}")
-        broadcast("partial", text)
+    # def on_partial_transcript(data):
+    #     text = data.get("text", "")
+    #     print(f"Partial: {text}")
+    #     broadcast("partial", text)
 
     def on_committed_transcript(data):
         text = data.get("text", "")
