@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import os
+import sys
 from typing import List
 
 from dedalus_labs import AsyncDedalus, DedalusRunner
@@ -8,13 +9,8 @@ from dotenv import load_dotenv
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run kernel-mcp via Dedalus")
-    parser.add_argument(
-        "--input",
-        dest="input_text",
-        default=os.getenv("KERNEL_MCP_INPUT", "Tell me about kernel-mcp tools."),
-        help="Prompt to send to the MCP server",
-    )
+    parser = argparse.ArgumentParser(description="Run kernel-mcp via Dedalus (Chat Mode)")
+    # Removed the "--input" argument since we are now interactive
     parser.add_argument(
         "--model",
         default=os.getenv("KERNEL_MCP_MODEL", "openai/gpt-5-nano"),
@@ -40,17 +36,56 @@ async def main() -> None:
     load_dotenv()
     args = _parse_args()
 
-    client = AsyncDedalus()
-    runner = DedalusRunner(client)
+    print(f"--- Dedalus Terminal Chat ---")
+    print(f"Model: {args.model}")
+    print(f"Servers: {args.mcp}")
+    print("Initializing client... (Type 'quit' or 'exit' to stop)")
 
-    result = await runner.run(
-        input=args.input_text,
-        model=args.model,
-        mcp_servers=args.mcp,
-    )
+    # 1. Initialize the client ONCE outside the loop
+    try:
+        client = AsyncDedalus()
+        runner = DedalusRunner(client)
+    except Exception as e:
+        print(f"Failed to initialize client: {e}")
+        return
 
-    print(result.final_output)
+    # 2. Enter the infinite loop
+    while True:
+        try:
+            # Use standard python input (this blocks until you type)
+            user_input = input("\nYou: ").strip()
 
+            # Check for exit commands
+            if user_input.lower() in ["exit", "quit", "q"]:
+                print("Goodbye!")
+                break
+
+            # Skip empty inputs
+            if not user_input:
+                continue
+
+            print("Dedalus: Thinking...", end="\r", flush=True)
+
+            # 3. Run the async request
+            result = await runner.run(
+                input=user_input,
+                model=args.model,
+                mcp_servers=args.mcp
+            )
+            
+            # Clear the "Thinking..." line and print result
+            sys.stdout.write("\033[K") # ANSI escape to clear line (optional polish)
+            print(f"Dedalus: {result.final_output}")
+
+        except KeyboardInterrupt:
+            # Handle Ctrl+C gracefully
+            print("\nInterrupted. Exiting...")
+            break
+        except Exception as e:
+            print(f"\nError: {e}")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
