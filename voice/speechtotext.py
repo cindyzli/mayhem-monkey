@@ -7,12 +7,12 @@ import threading
 from flask import Flask, Response
 from elevenlabs import ElevenLabs, RealtimeEvents, RealtimeUrlOptions
 from elevenlabs import AudioFormat, CommitStrategy, ElevenLabs, RealtimeAudioOptions
-from selenium import webdriver
+from playwright.async_api import async_playwright
 import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
-from web.selenium_adapter import SeleniumAdapter
 from chaos_methods import ChaosMonkey
-from command_router import ChaosCommandRouter
+from voice.playwright_adapter import PlaywrightAdapter
+from voice.command_router import ChaosCommandRouter
 
 
 load_dotenv()
@@ -58,8 +58,17 @@ async def main():
     )
     server_thread.start()
     print("Live transcript server running on http://localhost:30001/transcript")
-    selenium_driver = webdriver.Chrome()
-    adapter = SeleniumAdapter(selenium_driver)
+
+    playwright = await async_playwright().start()
+    headless = os.getenv("CHAOS_HEADLESS", "false").lower() in ("1", "true", "yes")
+    browser = await playwright.chromium.launch(headless=headless)
+    context = await browser.new_context()
+    page = await context.new_page()
+    start_url = os.getenv("CHAOS_START_URL")
+    if start_url:
+        await page.goto(start_url)
+
+    adapter = PlaywrightAdapter(page=page, context=context)
     monkey = ChaosMonkey()
     router = ChaosCommandRouter(monkey, driver=adapter, dry_run=False)
 
@@ -117,6 +126,8 @@ async def main():
         print("\nStopping transcription...")
     finally:
         await connection.close()
+        await browser.close()
+        await playwright.stop()
 
 if __name__ == "__main__":
     asyncio.run(main())

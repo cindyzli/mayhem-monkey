@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import re
@@ -5,7 +6,7 @@ from typing import Any, Dict, Optional
 
 from chaos_methods import ChaosMonkey
 
-from voice.k2_client import K2Client
+from voice.dedalus_client import DedalusClient
 
 
 class ChaosCommandRouter:
@@ -28,12 +29,12 @@ class ChaosCommandRouter:
         self._dispatch(action)
 
     def _infer_action(self, text: str) -> Dict[str, Any]:
-        if os.getenv("K2_API_KEY"):
-            return self._infer_action_with_k2(text)
+        if os.getenv("DEDALUS_API_KEY"):
+            return self._infer_action_with_gemini(text)
         return self._infer_action_with_keywords(text)
 
-    def _infer_action_with_k2(self, text: str) -> Dict[str, Any]:
-        client = K2Client()
+    def _infer_action_with_gemini(self, text: str) -> Dict[str, Any]:
+        client = DedalusClient()
         prompt = (
             "You are a command router for a safe chaos testing tool. "
             "Pick exactly one action from the allowed list and return JSON only.\n\n"
@@ -60,11 +61,21 @@ class ChaosCommandRouter:
             {"role": "system", "content": prompt},
             {"role": "user", "content": text},
         ]
-        content = client.chat(messages)
+        content = self._run_async(client.chat(messages))
         try:
             return json.loads(content)
         except json.JSONDecodeError:
             return self._infer_action_with_keywords(text)
+
+    def _run_async(self, coro):
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(coro)
+        if loop.is_running():
+            future = asyncio.run_coroutine_threadsafe(coro, loop)
+            return future.result()
+        return loop.run_until_complete(coro)
 
     def _extract_url_from_text(self, text: str) -> Optional[str]:
         url_match = re.search(r"https?://[^\s]+", text, re.IGNORECASE)
