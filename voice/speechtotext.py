@@ -8,10 +8,10 @@ from flask import Flask, Response
 from elevenlabs import ElevenLabs, RealtimeEvents, RealtimeUrlOptions
 from elevenlabs import AudioFormat, CommitStrategy, ElevenLabs, RealtimeAudioOptions
 from selenium import webdriver
-from selenium_adapter import SeleniumAdapter
+
 import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
-
+from web.selenium_adapter import SeleniumAdapter
 from chaos_methods import ChaosMonkey
 from command_router import ChaosCommandRouter
 
