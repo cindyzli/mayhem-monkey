@@ -2,6 +2,7 @@
 .env.*
 .env.local
 .envrc
+.claude
 *.env
 __pycache__/
 *.pyc

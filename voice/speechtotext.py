@@ -8,7 +8,6 @@ from flask import Flask, Response
 from elevenlabs import ElevenLabs, RealtimeEvents, RealtimeUrlOptions
 from elevenlabs import AudioFormat, CommitStrategy, ElevenLabs, RealtimeAudioOptions
 from selenium import webdriver
-
 import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from web.selenium_adapter import SeleniumAdapter
