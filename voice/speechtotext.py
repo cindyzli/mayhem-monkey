@@ -7,6 +7,13 @@ import threading
 from flask import Flask, Response
 from elevenlabs import ElevenLabs, RealtimeEvents, RealtimeUrlOptions
 from elevenlabs import AudioFormat, CommitStrategy, ElevenLabs, RealtimeAudioOptions
+from selenium import webdriver
+from selenium_adapter import SeleniumAdapter
+import sys, pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+
+from chaos_methods import ChaosMonkey
+from command_router import ChaosCommandRouter
 
 
 load_dotenv()
@@ -52,9 +59,13 @@ async def main():
     )
     server_thread.start()
     print("Live transcript server running on http://localhost:30001/transcript")
+    selenium_driver = webdriver.Chrome()
+    adapter = SeleniumAdapter(selenium_driver)
+    monkey = ChaosMonkey()
+    router = ChaosCommandRouter(monkey, driver=adapter, dry_run=False)
 
     elevenlabs = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
-
+    
     stop_event = asyncio.Event()
 
     connection = await elevenlabs.speech_to_text.realtime.connect(RealtimeUrlOptions(
@@ -65,7 +76,7 @@ async def main():
         vad_threshold=0.4,
         min_speech_duration_ms=100,
         min_silence_duration_ms=100,
-        include_timestamps=True,
+        include_timestamps=False,
     ))
 
     def on_session_started(data):
@@ -80,6 +91,7 @@ async def main():
         text = data.get("text", "")
         print(f"Committed: {text}")
         broadcast("committed", text)
+        router.handle_text(text)
 
     def on_committed_transcript_with_timestamps(data):
         print(f"Committed with timestamps: {data.get('words', '')}")
@@ -92,7 +104,7 @@ async def main():
         print("Connection closed")
 
     connection.on(RealtimeEvents.SESSION_STARTED, on_session_started)
-    connection.on(RealtimeEvents.PARTIAL_TRANSCRIPT, on_partial_transcript)
+    # connection.on(RealtimeEvents.PARTIAL_TRANSCRIPT, on_partial_transcript)
     connection.on(RealtimeEvents.COMMITTED_TRANSCRIPT, on_committed_transcript)
     connection.on(RealtimeEvents.COMMITTED_TRANSCRIPT_WITH_TIMESTAMPS, on_committed_transcript_with_timestamps)
     connection.on(RealtimeEvents.ERROR, on_error)

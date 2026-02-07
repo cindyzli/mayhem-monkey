@@ -1,5 +1,6 @@
 import json
 import os
+import urllib.error
 import urllib.request
 from typing import Any, Dict, List, Optional
 
@@ -23,6 +24,7 @@ class K2Client:
             raise RuntimeError("K2_API_KEY is not set")
 
     def chat(self, messages: List[Dict[str, str]], temperature: float = 0) -> str:
+        
         payload = {
             "model": self.model,
             "messages": messages,
@@ -30,6 +32,7 @@ class K2Client:
             "temperature": temperature,
         }
         data = json.dumps(payload).encode("utf-8")
+        print("one")
         request = urllib.request.Request(
             self.api_url,
             data=data,
@@ -37,11 +40,18 @@ class K2Client:
                 "accept": "application/json",
                 "authorization": f"Bearer {self.api_key}",
                 "content-type": "application/json",
+                "User-Agent": "MayhemMonkey/1.0",
             },
             method="POST",
         )
-        with urllib.request.urlopen(request, timeout=self.timeout_s) as response:
-            raw = response.read().decode("utf-8")
+        print("two")
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout_s) as response:
+                raw = response.read().decode("utf-8")
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"K2 API error {e.code}: {body}") from e
+        print("three")
         parsed: Dict[str, Any] = json.loads(raw)
         choices = parsed.get("choices", [])
         if not choices:
