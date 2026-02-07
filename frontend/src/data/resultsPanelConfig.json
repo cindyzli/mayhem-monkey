@@ -1,0 +1,19 @@
+{
+  "headerTitle": "Scan Results",
+  "headerSubtitle": {
+    "singular": "Found {count} vulnerability",
+    "plural": "Found {count} vulnerabilities"
+  },
+  "summaryLabels": {
+    "critical": "Critical",
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low"
+  },
+  "detailSections": {
+    "description": "Description",
+    "codeSnippet": "Code Snippet",
+    "impact": "Impact",
+    "recommendation": "Recommendation"
+  }
+}
