@@ -179,6 +179,27 @@ class ChaosMonkey:
                 return
         raise RuntimeError("driver lacks open_new_tab() or new_page().goto()")
 
+    def extract_links(self, driver: Any, selector: str = "a[href]") -> List[str]:
+        """
+        Extract href links from the current page.
+        Expects driver.query_selector_all(selector) and element.get_attribute("href")
+        or driver.execute_script to read attributes.
+        """
+        if not hasattr(driver, "query_selector_all"):
+            raise RuntimeError("driver lacks query_selector_all()")
+        elements = driver.query_selector_all(selector)
+        links: List[str] = []
+        for element in elements:
+            href = None
+            if hasattr(element, "get_attribute"):
+                href = element.get_attribute("href")
+            elif hasattr(driver, "execute_script"):
+                href = driver.execute_script("return arguments[0].getAttribute('href');", element)
+            if href:
+                links.append(href)
+        self._record("extract_links", "ok", f"found {len(links)} links")
+        return links
+
     def remove_dom_nodes(self, driver: Any, selector: str) -> None:
         """
         Remove DOM nodes matching selector.

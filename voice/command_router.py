@@ -1,7 +1,7 @@
 import json
 import os
+import re
 from typing import Any, Dict, Optional
-import sys
 
 from chaos_methods import ChaosMonkey
 
@@ -40,6 +40,7 @@ class ChaosCommandRouter:
             "Allowed actions:\n"
             "- click_random(count:int)\n"
             "- open_new_tab(url:str)\n"
+            "- extract_links(selector:str)\n"
             "- remove_dom_nodes(selector:str)\n"
             "- simulate_network_issues(latency_ms:int, throughput_kbps:int, offline:bool)\n"
             "- random_scroll(steps:int)\n"
@@ -49,6 +50,7 @@ class ChaosCommandRouter:
             "- input_value(selector:str, value:str)\n"
             "- input_fuzzing(selector:str, max_payloads:int)\n"
             "- generate_report(path:str)\n\n"
+            "If the user specifies a URL in their command, extract it and use it for open_new_tab.\n"
             "If the user does not specify a URL for open_new_tab, "
             "use https://www.google.com.\n\n"
             "Return JSON in the format:\n"
@@ -64,15 +66,34 @@ class ChaosCommandRouter:
         except json.JSONDecodeError:
             return self._infer_action_with_keywords(text)
 
+    def _extract_url_from_text(self, text: str) -> Optional[str]:
+        url_match = re.search(r"https?://[^\s]+", text, re.IGNORECASE)
+        if url_match:
+            return url_match.group(0).rstrip(").,;")
+        domain_match = re.search(
+            r"\b([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.[a-zA-Z]{2,})\b",
+            text,
+        )
+        if domain_match:
+            return f"https://{domain_match.group(1)}"
+        return None
+
     def _infer_action_with_keywords(self, text: str) -> Dict[str, Any]:
         lowered = text.lower()
         default_url = os.getenv("CHAOS_DEFAULT_URL") or os.getenv("CHAOS_START_URL") or "https://www.google.com"
+        extracted_url = self._extract_url_from_text(text)
         if "click" in lowered:
             return {"action": "click_random", "args": {"count": 10}}
         if "open" in lowered and "tab" in lowered:
-            return {"action": "open_new_tab", "args": {"url": default_url}}
+            return {"action": "open_new_tab", "args": {"url": extracted_url or default_url}}
         if "open" in lowered and "chrome" in lowered:
-            return {"action": "open_new_tab", "args": {"url": default_url}}
+            return {"action": "open_new_tab", "args": {"url": extracted_url or default_url}}
+        if extracted_url and any(word in lowered for word in ("open", "go", "navigate", "visit")):
+            return {"action": "open_new_tab", "args": {"url": extracted_url}}
+        if "extract" in lowered and "link" in lowered:
+            return {"action": "extract_links", "args": {"selector": "a[href]"}}
+        if "get" in lowered and "link" in lowered:
+            return {"action": "extract_links", "args": {"selector": "a[href]"}}
         if "remove" in lowered and "dom" in lowered:
             return {"action": "remove_dom_nodes", "args": {"selector": "header, footer"}}
         if "slow" in lowered or "network" in lowered:
@@ -109,5 +130,11 @@ class ChaosCommandRouter:
         if name == "open_new_tab" and "url" not in args:
             args["url"] = os.getenv("CHAOS_DEFAULT_URL") or os.getenv("CHAOS_START_URL") or "https://www.google.com"
 
+        if name == "extract_links" and "selector" not in args:
+            args["selector"] = "a[href]"
+
         method = getattr(self.monkey, name)
-        method(self.driver, **args)
+        result = method(self.driver, **args)
+        if name == "extract_links" and isinstance(result, list):
+            preview = ", ".join(result[:5])
+            print(f"[LINKS] {len(result)} found: {preview}")
