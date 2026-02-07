@@ -1,9 +1,26 @@
 import { AlertTriangle, AlertOctagon, AlertCircle, Info, ChevronDown, ChevronUp, CheckCircle } from 'lucide-react';
 import { useState } from 'react';
 import type { Vulnerability, Severity } from './VulnerabilityScanner';
+import defaultResultsPanelConfig from '../data/resultsPanelConfig.json';
 
 interface ResultsPanelProps {
   vulnerabilities: Vulnerability[];
+  config?: ResultsPanelConfig;
+}
+
+interface ResultsPanelConfig {
+  headerTitle: string;
+  headerSubtitle: {
+    singular: string;
+    plural: string;
+  };
+  summaryLabels: Record<Severity, string>;
+  detailSections: {
+    description: string;
+    codeSnippet: string;
+    impact: string;
+    recommendation: string;
+  };
 }
 
 const severityConfig = {
@@ -37,7 +54,7 @@ const severityConfig = {
   }
 };
 
-export function ResultsPanel({ vulnerabilities }: ResultsPanelProps) {
+export function ResultsPanel({ vulnerabilities, config = defaultResultsPanelConfig }: ResultsPanelProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const toggleExpand = (id: string) => {
@@ -54,15 +71,17 @@ export function ResultsPanel({ vulnerabilities }: ResultsPanelProps) {
   const highCount = vulnerabilities.filter(v => v.severity === 'high').length;
   const mediumCount = vulnerabilities.filter(v => v.severity === 'medium').length;
   const lowCount = vulnerabilities.filter(v => v.severity === 'low').length;
+  const subtitleTemplate = vulnerabilities.length === 1 ? config.headerSubtitle.singular : config.headerSubtitle.plural;
+  const subtitle = subtitleTemplate.replace('{count}', String(vulnerabilities.length));
 
   return (
     <div className="bg-gray-800/50 border border-gray-700 rounded-lg overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-700 bg-gray-800/30">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-medium text-lg text-white">Scan Results</h3>
+            <h3 className="font-medium text-lg text-white">{config.headerTitle}</h3>
             <p className="text-sm text-gray-400 mt-0.5">
-              Found {vulnerabilities.length} {vulnerabilities.length === 1 ? 'vulnerability' : 'vulnerabilities'}
+              {subtitle}
             </p>
           </div>
           <CheckCircle className="w-6 h-6 text-green-400" />
@@ -72,26 +91,26 @@ export function ResultsPanel({ vulnerabilities }: ResultsPanelProps) {
       <div className="grid grid-cols-4 gap-3 p-4 border-b border-gray-700">
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-center">
           <div className="text-2xl font-bold text-red-400">{criticalCount}</div>
-          <div className="text-xs text-gray-400 mt-1">Critical</div>
+          <div className="text-xs text-gray-400 mt-1">{config.summaryLabels.critical}</div>
         </div>
         <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 text-center">
           <div className="text-2xl font-bold text-orange-400">{highCount}</div>
-          <div className="text-xs text-gray-400 mt-1">High</div>
+          <div className="text-xs text-gray-400 mt-1">{config.summaryLabels.high}</div>
         </div>
         <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-center">
           <div className="text-2xl font-bold text-yellow-400">{mediumCount}</div>
-          <div className="text-xs text-gray-400 mt-1">Medium</div>
+          <div className="text-xs text-gray-400 mt-1">{config.summaryLabels.medium}</div>
         </div>
         <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 text-center">
           <div className="text-2xl font-bold text-blue-400">{lowCount}</div>
-          <div className="text-xs text-gray-400 mt-1">Low</div>
+          <div className="text-xs text-gray-400 mt-1">{config.summaryLabels.low}</div>
         </div>
       </div>
 
       <div className="divide-y divide-gray-700 max-h-[600px] overflow-y-auto">
         {vulnerabilities.map((vuln) => {
-          const config = severityConfig[vuln.severity];
-          const Icon = config.icon;
+          const severity = severityConfig[vuln.severity];
+          const Icon = severity.icon;
           const isExpanded = expandedIds.has(vuln.id);
 
           return (
@@ -101,8 +120,8 @@ export function ResultsPanel({ vulnerabilities }: ResultsPanelProps) {
                 className="w-full text-left"
               >
                 <div className="flex items-start gap-3">
-                  <div className={`p-2 rounded-lg ${config.bg} ${config.border} border flex-shrink-0`}>
-                    <Icon className={`w-5 h-5 ${config.color}`} />
+                  <div className={`p-2 rounded-lg ${severity.bg} ${severity.border} border flex-shrink-0`}>
+                    <Icon className={`w-5 h-5 ${severity.color}`} />
                   </div>
                   
                   <div className="flex-1 min-w-0">
@@ -110,8 +129,8 @@ export function ResultsPanel({ vulnerabilities }: ResultsPanelProps) {
                       <div className="flex-1">
                         <h4 className="font-medium text-gray-100">{vuln.title}</h4>
                         <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${config.bg} ${config.color} border ${config.border}`}>
-                            {config.label}
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${severity.bg} ${severity.color} border ${severity.border}`}>
+                            {config.summaryLabels[vuln.severity]}
                           </span>
                           <span className="text-xs text-gray-500">
                             Line {vuln.line}
@@ -140,24 +159,24 @@ export function ResultsPanel({ vulnerabilities }: ResultsPanelProps) {
               {isExpanded && (
                 <div className="mt-4 ml-14 space-y-4">
                   <div>
-                    <h5 className="text-sm font-medium text-gray-300 mb-1.5">Description</h5>
+                    <h5 className="text-sm font-medium text-gray-300 mb-1.5">{config.detailSections.description}</h5>
                     <p className="text-sm text-gray-400 leading-relaxed">{vuln.description}</p>
                   </div>
 
                   <div>
-                    <h5 className="text-sm font-medium text-gray-300 mb-1.5">Code Snippet</h5>
+                    <h5 className="text-sm font-medium text-gray-300 mb-1.5">{config.detailSections.codeSnippet}</h5>
                     <pre className="bg-gray-950 border border-gray-700 rounded-lg p-3 text-sm text-gray-300 overflow-x-auto">
                       <code>{vuln.codeSnippet}</code>
                     </pre>
                   </div>
 
                   <div>
-                    <h5 className="text-sm font-medium text-gray-300 mb-1.5">Impact</h5>
+                    <h5 className="text-sm font-medium text-gray-300 mb-1.5">{config.detailSections.impact}</h5>
                     <p className="text-sm text-gray-400 leading-relaxed">{vuln.impact}</p>
                   </div>
 
                   <div>
-                    <h5 className="text-sm font-medium text-gray-300 mb-1.5">Recommendation</h5>
+                    <h5 className="text-sm font-medium text-gray-300 mb-1.5">{config.detailSections.recommendation}</h5>
                     <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
                       <p className="text-sm text-gray-300 leading-relaxed">{vuln.recommendation}</p>
                     </div>
