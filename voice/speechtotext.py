@@ -7,11 +7,10 @@ import threading
 from flask import Flask, Response
 from elevenlabs import ElevenLabs, RealtimeEvents, RealtimeUrlOptions
 from elevenlabs import AudioFormat, CommitStrategy, ElevenLabs, RealtimeAudioOptions
-from playwright.async_api import async_playwright
+import importlib.util
 import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from chaos_methods import ChaosMonkey
-from voice.playwright_adapter import PlaywrightAdapter
 from voice.command_router import ChaosCommandRouter
 
 
@@ -59,16 +58,17 @@ async def main():
     server_thread.start()
     print("Live transcript server running on http://localhost:30001/transcript")
 
-    playwright = await async_playwright().start()
     headless = os.getenv("CHAOS_HEADLESS", "false").lower() in ("1", "true", "yes")
-    browser = await playwright.chromium.launch(headless=headless)
-    context = await browser.new_context()
-    page = await context.new_page()
     start_url = os.getenv("CHAOS_START_URL")
-    if start_url:
-        await page.goto(start_url)
-
-    adapter = PlaywrightAdapter(page=page, context=context)
+    driver_module_path = pathlib.Path(__file__).resolve().parents[1] / "playwright" / "voice_driver.py"
+    spec = importlib.util.spec_from_file_location("mm_playwright_voice_driver", driver_module_path)
+    module = importlib.util.module_from_spec(spec)
+    if spec and spec.loader:
+        spec.loader.exec_module(module)
+    else:
+        raise RuntimeError("Could not load Playwright voice driver")
+    driver = module.PlaywrightVoiceDriver(headless=headless, start_url=start_url)
+    adapter = driver.adapter
     monkey = ChaosMonkey()
     router = ChaosCommandRouter(monkey, driver=adapter, dry_run=False)
 
@@ -126,8 +126,7 @@ async def main():
         print("\nStopping transcription...")
     finally:
         await connection.close()
-        await browser.close()
-        await playwright.stop()
+        driver.stop()
 
 if __name__ == "__main__":
     asyncio.run(main())
