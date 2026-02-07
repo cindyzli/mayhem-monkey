@@ -1,1 +1,7 @@
 .env
+.env.*
+.env.local
+.envrc
+*.env
+__pycache__/
+*.pyc
