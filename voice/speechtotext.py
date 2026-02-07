@@ -1,47 +1,89 @@
 from dotenv import load_dotenv
 import os
 import asyncio
+import json
+import queue
+import threading
+from flask import Flask, Response
 from elevenlabs import ElevenLabs, RealtimeEvents, RealtimeUrlOptions
 
 load_dotenv()
 
+app = Flask(__name__)
+listeners = []
+listeners_lock = threading.Lock()
+
+
+def broadcast(event_type, text):
+    """Push an SSE event to all connected listeners immediately."""
+    data = json.dumps({"type": event_type, "text": text})
+    msg = f"event: transcript\ndata: {data}\n\n"
+    with listeners_lock:
+        for q in listeners:
+            q.put(msg)
+
+
+@app.route("/transcript")
+def transcript_stream():
+    """Live SSE endpoint — streams transcript events in real-time."""
+    q = queue.Queue()
+    with listeners_lock:
+        listeners.append(q)
+
+    def generate():
+        try:
+            while True:
+                msg = q.get()
+                yield msg
+        finally:
+            with listeners_lock:
+                listeners.remove(q)
+
+    return Response(generate(), mimetype="text/event-stream")
+
+
 async def main():
+    # Start Flask SSE server in a background thread
+    server_thread = threading.Thread(
+        target=lambda: app.run(host="0.0.0.0", port=30001, threaded=True),
+        daemon=True,
+    )
+    server_thread.start()
+    print("Live transcript server running on http://localhost:30001/transcript")
+
     elevenlabs = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
 
-    # Create an event to signal when to stop
     stop_event = asyncio.Event()
 
-    # Connect to a streaming audio URL
     connection = await elevenlabs.speech_to_text.realtime.connect(RealtimeUrlOptions(
         model_id="scribe_v2_realtime",
         url="http://localhost:30000/stream",
         include_timestamps=True,
     ))
 
-    # Set up event handlers
     def on_session_started(data):
         print(f"Session started: {data}")
 
     def on_partial_transcript(data):
-        print(f"Partial: {data.get('text', '')}")
+        text = data.get("text", "")
+        print(f"Partial: {text}")
+        broadcast("partial", text)
 
     def on_committed_transcript(data):
-        print(f"Committed: {data.get('text', '')}")
+        text = data.get("text", "")
+        print(f"Committed: {text}")
+        broadcast("committed", text)
 
-    # Committed transcripts with word-level timestamps. Only received when include_timestamps is set to True.
     def on_committed_transcript_with_timestamps(data):
         print(f"Committed with timestamps: {data.get('words', '')}")
 
-    # Errors - will catch all errors, both server and websocket specific errors
     def on_error(error):
         print(f"Error: {error}")
-        # Signal to stop on error
         stop_event.set()
 
     def on_close():
         print("Connection closed")
 
-    # Register event handlers
     connection.on(RealtimeEvents.SESSION_STARTED, on_session_started)
     connection.on(RealtimeEvents.PARTIAL_TRANSCRIPT, on_partial_transcript)
     connection.on(RealtimeEvents.COMMITTED_TRANSCRIPT, on_committed_transcript)
@@ -52,7 +94,6 @@ async def main():
     print("Transcribing audio stream... (Press Ctrl+C to stop)")
 
     try:
-        # Wait until error occurs or connection closes
         await stop_event.wait()
     except KeyboardInterrupt:
         print("\nStopping transcription...")
