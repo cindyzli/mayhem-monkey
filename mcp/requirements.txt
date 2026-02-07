@@ -1,0 +1,3 @@
+dedalus-mcp
+dedalus-labs
+python-dotenv

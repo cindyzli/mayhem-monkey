@@ -5,10 +5,18 @@ This folder contains a small client that calls the `akakak/kernel-mcp` MCP serve
 ## Install
 
 ```bash
-python -m pip install dedalus-labs python-dotenv
+python -m pip install -r mcp/requirements.txt
 ```
 
 ## Run
+
+```bash
+python mcp/server.py
+```
+
+Server starts on `http://127.0.0.1:8000/mcp`.
+
+## Run the client
 
 ```bash
 python mcp/kernel_mcp_client.py --input "Use your tools to summarize kernel-mcp"

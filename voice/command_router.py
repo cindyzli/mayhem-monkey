@@ -1,4 +1,5 @@
 import asyncio
+import concurrent.futures
 import json
 import os
 import re
@@ -61,21 +62,28 @@ class ChaosCommandRouter:
             {"role": "system", "content": prompt},
             {"role": "user", "content": text},
         ]
-        content = self._run_async(client.chat(messages))
+        timeout_s = int(os.getenv("LLM_TIMEOUT_S", "15"))
+        try:
+            content = self._run_async(client.chat(messages), timeout_s=timeout_s)
+        except Exception:
+            return self._infer_action_with_keywords(text)
         try:
             return json.loads(content)
         except json.JSONDecodeError:
             return self._infer_action_with_keywords(text)
 
-    def _run_async(self, coro):
+    def _run_async(self, coro, timeout_s: int):
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
-            return asyncio.run(coro)
+            return asyncio.run(asyncio.wait_for(coro, timeout=timeout_s))
         if loop.is_running():
-            future = asyncio.run_coroutine_threadsafe(coro, loop)
-            return future.result()
-        return loop.run_until_complete(coro)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    lambda: asyncio.run(asyncio.wait_for(coro, timeout=timeout_s))
+                )
+                return future.result(timeout=timeout_s + 2)
+        return loop.run_until_complete(asyncio.wait_for(coro, timeout=timeout_s))
 
     def _extract_url_from_text(self, text: str) -> Optional[str]:
         url_match = re.search(r"https?://[^\s]+", text, re.IGNORECASE)
