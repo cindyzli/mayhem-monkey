@@ -1,0 +1,90 @@
+"""
+Flask API to start/stop capture.py (mic streaming) and open_url.py (voice listener).
+"""
+
+import os
+import subprocess
+import sys
+import signal
+import pathlib
+
+from flask import Flask, jsonify
+
+app = Flask(__name__)
+
+BASE_DIR = pathlib.Path(__file__).resolve().parent
+CAPTURE_SCRIPT = str(BASE_DIR / "voice" / "capture.py")
+OPEN_URL_SCRIPT = str(BASE_DIR / "voice" / "open_url.py")
+
+# Track running subprocesses
+_processes: dict[str, subprocess.Popen] = {}
+
+
+def _start_script(name: str, script_path: str) -> dict:
+    if name in _processes and _processes[name].poll() is None:
+        return {"status": "already_running", "name": name, "pid": _processes[name].pid}
+
+    proc = subprocess.Popen(
+        [sys.executable, script_path],
+        cwd=str(BASE_DIR),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    _processes[name] = proc
+    return {"status": "started", "name": name, "pid": proc.pid}
+
+
+def _stop_script(name: str) -> dict:
+    proc = _processes.get(name)
+    if proc is None or proc.poll() is not None:
+        _processes.pop(name, None)
+        return {"status": "not_running", "name": name}
+
+    proc.send_signal(signal.SIGTERM)
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+    _processes.pop(name, None)
+    return {"status": "stopped", "name": name}
+
+
+def _script_status(name: str) -> dict:
+    proc = _processes.get(name)
+    if proc is None or proc.poll() is not None:
+        return {"name": name, "running": False}
+    return {"name": name, "running": True, "pid": proc.pid}
+
+
+# --- Routes ---
+
+@app.route("/start/capture", methods=["POST"])
+def start_capture():
+    return jsonify(_start_script("capture", CAPTURE_SCRIPT))
+
+
+@app.route("/stop/capture", methods=["POST"])
+def stop_capture():
+    return jsonify(_stop_script("capture"))
+
+
+@app.route("/start/open_url", methods=["POST"])
+def start_open_url():
+    return jsonify(_start_script("open_url", OPEN_URL_SCRIPT))
+
+
+@app.route("/stop/open_url", methods=["POST"])
+def stop_open_url():
+    return jsonify(_stop_script("open_url"))
+
+
+@app.route("/status", methods=["GET"])
+def status():
+    return jsonify({
+        "capture": _script_status("capture"),
+        "open_url": _script_status("open_url"),
+    })
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
