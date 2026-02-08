@@ -190,6 +190,8 @@ def _collect_evidence(page, *, url_before: str) -> str:
 ALLOWED_ACTIONS = {"get_html", "click", "type_text", "input_text"}
 
 SCREENSHOT_DIR = os.path.join(os.path.dirname(__file__), "..", "screenshots")
+RESULTS_DIR = os.path.join(os.path.dirname(__file__), "..", "results")
+RESULTS_FILE = os.path.join(RESULTS_DIR, "scan_results.json")
 
 SYSTEM_PROMPT = """SYSTEM_PROMPT = \
 You are a senior security QA engineer testing a web application that you own \
@@ -244,6 +246,27 @@ Action example:
 
 When finished, return:
 {"thinking":"Testing complete.","result":"summary...","evidence":"...","risk":"...","recommendation":"..."}
+
+Once a vulnerability has been found, and only once a vulnerability has been found and confirmed, create a report and output a json with the following format.
+{
+"headerTitle": "Scan Results",
+"headerSubtitle": {
+"singular": "Found {count} vulnerability",
+"plural": "Found {count} vulnerabilities"
+},
+"summaryLabels": {
+"critical": "Critical",
+"high": "High",
+"medium": "Medium",
+"low": "Low"
+},
+"detailSections": {
+"description": "Description",
+"codeSnippet": "Code Snippet",
+"impact": "Impact",
+"recommendation": "Recommendation"
+}
+}
 """
 
 MAX_CONSECUTIVE_ERRORS = 5          # give up after this many parse/action failures in a row
@@ -496,9 +519,16 @@ def main(url: Optional[str] = None, threat_summary: str = "") -> None:
 
                 # Finished?
                 if "result" in parsed:
-                    summary = parsed["result"]
-                    print(f"\nDone! {summary}")
-                    speak(f"Testing complete. {summary}")
+                    # 1. Save results IMMEDIATEY
+                    os.makedirs(RESULTS_DIR, exist_ok=True)
+                    with open(RESULTS_FILE, "w") as rf:
+                        json.dump(parsed, rf, indent=2)
+                    
+                    print(f"\nDone! Results saved to {RESULTS_FILE}")
+                    
+                    # 2. Speak a short confirmation, NOT the raw JSON
+                    speak("Vulnerability scan complete. Results have been saved.")
+
                     break
 
                 # Execute

@@ -2,6 +2,7 @@
 Flask API to start/stop capture.py (mic streaming) and open_url.py (voice listener).
 """
 
+import json
 import os
 import subprocess
 import sys
@@ -15,6 +16,7 @@ app = Flask(__name__)
 BASE_DIR = pathlib.Path(__file__).resolve().parent
 CAPTURE_SCRIPT = str(BASE_DIR / "voice" / "capture.py")
 OPEN_URL_SCRIPT = str(BASE_DIR / "voice" / "open_url.py")
+RESULTS_FILE = BASE_DIR / "results" / "scan_results.json"
 
 # Track running subprocesses
 _processes: dict[str, subprocess.Popen] = {}
@@ -84,6 +86,18 @@ def status():
         "capture": _script_status("capture"),
         "open_url": _script_status("open_url"),
     })
+
+
+@app.route("/results", methods=["GET"])
+def results():
+    if not RESULTS_FILE.exists():
+        return jsonify({"status": "pending", "message": "No results yet"}), 202
+    try:
+        with open(RESULTS_FILE) as f:
+            data = json.load(f)
+        return jsonify({"status": "complete", "data": data})
+    except (json.JSONDecodeError, OSError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 500
 
 
 if __name__ == "__main__":
