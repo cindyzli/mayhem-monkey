@@ -63,12 +63,55 @@ def _script_status(name: str) -> dict:
 
 # --- Routes ---
 
-@app.route("/start", methods=["POST"])
+def _launch_scanner(url: str) -> tuple[dict, int]:
+    """Start the Gemini scanner subprocess."""
+    clean_url = (url or "").strip()
+    if not clean_url:
+        return {"error": "url is required"}, 400
+    if not clean_url.startswith(("http://", "https://")):
+        clean_url = f"https://{clean_url}"
+
+    if RESULTS_FILE.exists():
+        RESULTS_FILE.unlink()
+
+    proc = _processes.get("scanner")
+    if proc and proc.poll() is None:
+        return {"status": "already_running", "pid": proc.pid, "url": clean_url}, 200
+
+    proc = subprocess.Popen(
+        [sys.executable, SCANNER_SCRIPT, clean_url],
+        cwd=str(BASE_DIR),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    _processes["scanner"] = proc
+    return {"status": "started", "pid": proc.pid, "url": clean_url}, 200
+
+
+@app.route("/start", methods=["GET", "POST"])
 def start():
-    return jsonify({
+    payload = {
         "capture": _start_script("capture", CAPTURE_SCRIPT),
         "open_url": _start_script("open_url", OPEN_URL_SCRIPT),
-    })
+    }
+
+    if request.method == "POST":
+        body = request.get_json(silent=True) or {}
+        scanner_status, code = _launch_scanner(body.get("url", ""))
+        payload["scanner"] = scanner_status
+        return jsonify(payload), code
+
+    return jsonify(payload)
+
+
+@app.route("/start/capture", methods=["POST"])
+def start_capture():
+    return jsonify(_start_script("capture", CAPTURE_SCRIPT))
+
+
+@app.route("/start/open_url", methods=["POST"])
+def start_open_url():
+    return jsonify(_start_script("open_url", OPEN_URL_SCRIPT))
 
 
 @app.route("/stop", methods=["POST"])
@@ -105,26 +148,8 @@ def results():
 def scan_start():
     """Launch the Gemini chaos scanner for a given URL."""
     body = request.get_json(force=True) or {}
-    url = body.get("url", "").strip()
-    if not url:
-        return jsonify({"error": "url is required"}), 400
-
-    # Remove stale results so the frontend knows the new scan is in progress
-    if RESULTS_FILE.exists():
-        RESULTS_FILE.unlink()
-
-    proc = _processes.get("scanner")
-    if proc and proc.poll() is None:
-        return jsonify({"status": "already_running", "pid": proc.pid})
-
-    proc = subprocess.Popen(
-        [sys.executable, SCANNER_SCRIPT, url],
-        cwd=str(BASE_DIR),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    _processes["scanner"] = proc
-    return jsonify({"status": "started", "pid": proc.pid})
+    status, code = _launch_scanner(body.get("url", ""))
+    return jsonify(status), code
 
 
 @app.route("/scan/status", methods=["GET"])
@@ -145,4 +170,4 @@ def scan_stop():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=8000)

@@ -5,6 +5,7 @@ interface TestPanelProps {
   onTestsChange: (tests: string[]) => void;
   onStartScan: () => void;
   isScanning: boolean;
+  disabled?: boolean;
 }
 
 const testCategories = [
@@ -20,7 +21,7 @@ const testCategories = [
   { id: 'api-security', name: 'API Security', description: 'Checks API vulnerabilities' },
 ];
 
-export function TestPanel({ selectedTests, onTestsChange, onStartScan, isScanning }: TestPanelProps) {
+export function TestPanel({ selectedTests, onTestsChange, onStartScan, isScanning, disabled }: TestPanelProps) {
   const toggleTest = (testId: string) => {
     if (selectedTests.includes(testId)) {
       onTestsChange(selectedTests.filter(id => id !== testId));
@@ -47,7 +48,7 @@ export function TestPanel({ selectedTests, onTestsChange, onStartScan, isScannin
       <div className="p-4 space-y-4 flex flex-col" style={{ height: '400px' }}>
         <button
           onClick={onStartScan}
-          disabled={isScanning || selectedTests.length === 0}
+          disabled={disabled || selectedTests.length === 0}
           className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white px-4 py-3 rounded-lg font-medium transition-colors shadow-lg"
         >
           <Play className="w-5 h-5" />
