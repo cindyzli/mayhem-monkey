@@ -142,7 +142,7 @@ def results():
         with open(RESULTS_FILE) as f:
             data = json.load(f)
             print(f"data: {data}")
-        return jsonify({"status": "complete", "data": data}), 800
+        return jsonify({"status": "complete", "data": data}), 200
     except (json.JSONDecodeError, OSError) as exc:
         return jsonify({"status": "error", "message": str(exc)}), 500
 

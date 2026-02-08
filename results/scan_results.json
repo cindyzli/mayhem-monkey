@@ -1,0 +1,15 @@
+{
+  "vulnerabilities": [
+    {
+      "title": "SQL Injection in Search Functionality",
+      "severity": "critical",
+      "category": "SQL Injection",
+      "details": {
+        "description": "The search functionality on the /search page is vulnerable to SQL injection. Submitting a single quote (') as the search query caused the application to return a detailed database error page, confirming the vulnerability.",
+        "impact": "An attacker can execute arbitrary SQL queries to read, modify, or delete data from the database, potentially leading to a full compromise of the application and its data.",
+        "recommendation": "Implement parameterized queries (prepared statements) for all database interactions involving user-supplied input. This will ensure that user input is treated as data and not as executable SQL code.",
+        "codeSnippet": "POST /search\n\nquery='"
+      }
+    }
+  ]
+}
