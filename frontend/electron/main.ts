@@ -33,7 +33,7 @@ const createScannerWindow = () => {
 
   const { width: screenWidth } = screen.getPrimaryDisplay().workAreaSize
   const windowWidth = 450
-  const windowHeight = 820
+  const windowHeight = 840
 
   scannerWindow = new BrowserWindow({
     width: windowWidth,

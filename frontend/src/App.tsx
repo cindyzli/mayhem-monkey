@@ -16,7 +16,7 @@ export default function App() {
         
         <button
           onClick={openScanner}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors shadow-lg"
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors shadow-lg mb-8"
         >
           <Shield className="w-5 h-5" />
           Open Vulnerability Scanner

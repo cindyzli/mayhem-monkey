@@ -134,9 +134,11 @@ export function ResultsPanel({ vulnerabilities, config = defaultResultsPanelConf
                           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${severity.bg} ${severity.color} border ${severity.border}`}>
                             {config.summaryLabels[vuln.severity]}
                           </span>
-                          <span className="text-xs text-gray-500">
-                            Line {vuln.line}
-                          </span>
+                          {vuln.line > 0 && (
+                            <span className="text-xs text-gray-500">
+                              Line {vuln.line}
+                            </span>
+                          )}
                           <span className="text-xs text-gray-500">
                             {vuln.category}
                           </span>

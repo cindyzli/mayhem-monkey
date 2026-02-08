@@ -51,7 +51,7 @@ export function TestPanel({ selectedTests, onTestsChange, onStartScan, isScannin
           className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white px-4 py-3 rounded-lg font-medium transition-colors shadow-lg"
         >
           <Play className="w-5 h-5" />
-          {isScanning ? 'Scanning in Progress...' : 'Start Vulnerability Scan'}
+          {isScanning ? 'Listening for URL...(pls speak)' : 'Start Vulnerability Scan'}
         </button>
 
         <div className="flex items-center justify-between text-sm">

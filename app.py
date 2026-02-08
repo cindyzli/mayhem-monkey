@@ -9,13 +9,16 @@ import sys
 import signal
 import pathlib
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 
 BASE_DIR = pathlib.Path(__file__).resolve().parent
 CAPTURE_SCRIPT = str(BASE_DIR / "voice" / "capture.py")
 OPEN_URL_SCRIPT = str(BASE_DIR / "voice" / "open_url.py")
+SCANNER_SCRIPT = str(BASE_DIR / "attacker" / "gemini_router.py")
 RESULTS_FILE = BASE_DIR / "results" / "scan_results.json"
 
 # Track running subprocesses
@@ -94,6 +97,51 @@ def results():
         return jsonify({"status": "complete", "data": data})
     except (json.JSONDecodeError, OSError) as exc:
         return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+# --- Scanner (attacker/gemini_router.py) endpoints ---
+
+@app.route("/scan/start", methods=["POST"])
+def scan_start():
+    """Launch the Gemini chaos scanner for a given URL."""
+    body = request.get_json(force=True) or {}
+    url = body.get("url", "").strip()
+    if not url:
+        return jsonify({"error": "url is required"}), 400
+
+    # Remove stale results so the frontend knows the new scan is in progress
+    if RESULTS_FILE.exists():
+        RESULTS_FILE.unlink()
+
+    proc = _processes.get("scanner")
+    if proc and proc.poll() is None:
+        return jsonify({"status": "already_running", "pid": proc.pid})
+
+    proc = subprocess.Popen(
+        [sys.executable, SCANNER_SCRIPT, url],
+        cwd=str(BASE_DIR),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    _processes["scanner"] = proc
+    return jsonify({"status": "started", "pid": proc.pid})
+
+
+@app.route("/scan/status", methods=["GET"])
+def scan_status():
+    """Check whether the scanner is still running and whether results exist."""
+    proc = _processes.get("scanner")
+    running = proc is not None and proc.poll() is None
+    return jsonify({
+        "running": running,
+        "has_results": RESULTS_FILE.exists(),
+    })
+
+
+@app.route("/scan/stop", methods=["POST"])
+def scan_stop():
+    """Kill a running scanner."""
+    return jsonify(_stop_script("scanner"))
 
 
 if __name__ == "__main__":
