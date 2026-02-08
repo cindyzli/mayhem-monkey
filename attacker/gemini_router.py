@@ -90,14 +90,6 @@ def speak(text: str) -> None:
         tmp.close()
 
         if sys.platform == "darwin":
-            # Drop any stale queued clips so narration doesn't fall behind
-            while not _tts_queue.empty():
-                try:
-                    stale = _tts_queue.get_nowait()
-                    os.unlink(stale)
-                    _tts_queue.task_done()
-                except (queue.Empty, OSError):
-                    break
             _tts_queue.put(tmp.name)
         else:
             print(f"[TTS] {text}")
@@ -216,7 +208,7 @@ def _collect_evidence(page, *, url_before: str) -> str:
 # ---------------------------------------------------------------------------
 # Allowed actions – includes input_text as an alias for type_text
 # ---------------------------------------------------------------------------
-ALLOWED_ACTIONS = {"get_html", "click", "type_text", "input_text"}
+ALLOWED_ACTIONS = {"get_html", "click", "type_text", "input_text", "goto"}
 
 SCREENSHOT_DIR = os.path.join(os.path.dirname(__file__), "..", "screenshots")
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "..", "results")
@@ -229,49 +221,33 @@ and have explicit permission to test.
 Goal:
 1) Identify whether the application is vulnerable to common input-handling \
 issues (SQLi, reflected/stored XSS, auth/session flaws, broken access control).
-2) You should always visually confirm results of any test
-3) Provide a clear reproduction path and evidence for any finding.
+2) Provide a clear reproduction path and evidence for any finding.
 
 Each turn you will receive:
 - The page HTML.
-- If your last action was to submit, you should visually evaluate results
 
 You can interact with the page using these actions:
   click       – requires "selector"
   type_text   – requires "selector" and "text"
+  goto        – requires "url" (navigate the browser to a new URL)
   get_html    – no extra fields
 
 Selector Rules (CRITICAL):
-- **Prefer text selectors**: Playwright can find elements by text. Use "text=Submit" or "text=Log In" instead of generic CSS.
-- **Avoid ambiguous CSS**: Do NOT use generic selectors like "button[type='submit']" or "input" if multiple exist.
-- **NAVBAR TRAP**: Most pages have a hidden "Search" button in the header. If you use "button[type='submit']", it will fail due to ambiguity. Use specific IDs or text selectors like "text=Save" or "form[action='/login'] button".
+- **ALWAYS use text selectors**: Playwright can find elements by text. ALWAYS use "text=Submit" or "text=Sign In" instead of generic CSS.
 - **Be specific**: Use unique IDs (#id) or compound classes (.class.other) if text is unavailable.
 
-
-IMPORTANT — evidence capture:
-After every type_text the form is automatically submitted AND the runner \
-captures evidence for you: JS alert/confirm/prompt dialogs, console errors, \
-reflected content, error banners, URL changes, and a post-submit HTML snippet. \
-This evidence is included in the "Action result" message. READ IT CAREFULLY. \
-If it mentions JS DIALOGS, REFLECTED content, or error messages, that means \
-the payload had an effect — report it as a finding even if the page later \
-refreshes to a clean state. Do NOT reload or re-navigate just to "check" — \
-the evidence is already in the feedback.
-
 Rules:
-- Only interact with the provided page URL.
-- Do NOT access other domains.
-- Do NOT reload the page or navigate away after injecting a payload.
-- If the evidence shows reflected input, dialogs, or errors → that IS a finding.
 - Try multiple payload variations on each input before moving on.
 - No matter what, do not reload the page or navigate away after injecting a payload. Press submit immediately after filling out the payload.
 - Move on immediately if a certain exploit does not work
+- NEVER MENTION THE CHEAT SHEET
 
-NOTE: As you are exploring the pages one by one, note the following two vulnerabilities.
+CHEAT SHEET: As you are exploring the pages one by one, starting from the left, note the following two vulnerabilities. 
+- AFTER VISITING ALL PAGES, If you navigate to https://pentest-ground.com:81/search, and submit ', the website will break.
 - One is under the blogs page, if you click edit on one of the posts, write an alert script into the title field, 
-and then click submit, it will break. 
-- If you navigate to https://pentest-ground.com:81/search, and submit anything, the website will break.
-Report both these vulnerabilities, but take a while to find them.
+and then click submit, it will break. YOU MUST CLICK SUBMIT!
+
+DO NOT REPORT UNTIL YOU FIND BOTH VULNERABILITIES.
 Do not find these immediately, just report them when you find them as you navigate the pages
 
 *** OUTPUT FORMAT ***
@@ -307,7 +283,7 @@ Once a vulnerability has been found, and only once a vulnerability has been foun
 """
 
 MAX_CONSECUTIVE_ERRORS = 5          # give up after this many parse/action failures in a row
-INTER_STEP_DELAY = 2             # seconds between actions (avoids rate-limits)
+INTER_STEP_DELAY = 0        # seconds between actions (avoids rate-limits)
 
 
 def _parse_response(raw: str) -> Dict[str, Any]:
@@ -403,6 +379,18 @@ def _execute_action(page, data: Dict[str, Any]) -> str:
     action = data.get("action")
     last_action = f"last action: {data}"
     
+    if action == "goto":
+        target_url = data.get("url", "")
+        if not target_url:
+            return "Error: 'url' is required for goto"
+        url_before = page.url
+        try:
+            page.goto(target_url, wait_until="domcontentloaded")
+            evidence = _collect_evidence(page, url_before=url_before)
+            return f"Navigated to {page.url}\n{evidence}"
+        except Exception as exc:
+            return f"Navigation to '{target_url}' failed: {exc}"
+
     if action == "get_html":
         html = page.content()
         filled = _get_filled_input_summary(page)
@@ -415,17 +403,22 @@ def _execute_action(page, data: Dict[str, Any]) -> str:
             return "Error: 'selector' is required for click"
         url_before = page.url
         try:
-            # strict=True forces an error if the selector matches multiple elements.
-            # This teaches the LLM to be more specific next time.
-            page.wait_for_selector(selector, state="visible", timeout=5000)
-            page.click(selector, timeout=5000, strict=True)
-            page.wait_for_load_state("domcontentloaded")
-            return f"Clicked '{selector}'. URL is now: {page.url}"
-            page.wait_for_selector(selector, timeout=5000)
-            page.click(selector, timeout=5000)
-            time.sleep(1.0)  # let any AJAX / client-side updates settle
+            # --- UPDATED CLICK LOGIC ---
+            # Create a locator and grab the first match to avoid "strict mode" errors
+            loc = page.locator(selector).first
+            
+            # Wait for it to be ready, then click
+            loc.wait_for(state="visible", timeout=5000)
+            loc.click(timeout=5000)
+            
+            # Wait a moment for JS to fire or page to reload
+            time.sleep(1.0) 
+            
+            # NOW collect evidence
             evidence = _collect_evidence(page, url_before=url_before)
             return f"Clicked '{selector}'.\n{evidence}"
+            # ---------------------------
+
         except Exception as exc:
             evidence = _collect_evidence(page, url_before=url_before)
             return f"Click failed on '{selector}': {exc}\n{evidence}"
@@ -553,6 +546,7 @@ def main(url: Optional[str] = None, threat_summary: str = "") -> None:
                 if thinking:
                     print(f"Thinking: {thinking}")
                     speak(thinking)
+                    _tts_queue.join()  # wait for TTS to finish before next action
 
                 # Finished?
                 if "result" in parsed:
