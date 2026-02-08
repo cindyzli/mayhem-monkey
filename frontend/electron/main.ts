@@ -1,7 +1,41 @@
 import { app, BrowserWindow, ipcMain, screen } from 'electron'
 import path from 'path'
+import { spawn, ChildProcess } from 'child_process'
 
 let scannerWindow: BrowserWindow | null = null
+let backendProcess: ChildProcess | null = null
+
+// app.py lives at the project root (one level above frontend/)
+const PROJECT_ROOT = path.join(__dirname, '..', '..', '..')
+const BACKEND_SCRIPT = path.join(PROJECT_ROOT, 'app.py')
+
+const startBackend = () => {
+  if (backendProcess) return
+
+  console.log('[backend] Starting app.py from:', BACKEND_SCRIPT)
+  backendProcess = spawn('python3', [BACKEND_SCRIPT], {
+    cwd: PROJECT_ROOT,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+
+  backendProcess.stdout?.on('data', (data: Buffer) => {
+    console.log(`[backend] ${data.toString().trimEnd()}`)
+  })
+  backendProcess.stderr?.on('data', (data: Buffer) => {
+    console.error(`[backend] ${data.toString().trimEnd()}`)
+  })
+  backendProcess.on('exit', (code) => {
+    console.log(`[backend] app.py exited with code ${code}`)
+    backendProcess = null
+  })
+}
+
+const stopBackend = () => {
+  if (!backendProcess) return
+  console.log('[backend] Stopping app.py')
+  backendProcess.kill('SIGTERM')
+  backendProcess = null
+}
 
 const createWindow = () => {
   console.log('=== CREATING MAIN WINDOW ===')
@@ -77,6 +111,7 @@ const closeScannerWindow = () => {
 
 app.whenReady().then(() => {
   console.log('=== APP STARTING ===')
+  startBackend()
   createWindow()
 
   // IPC handlers for scanner window
@@ -100,4 +135,8 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+app.on('will-quit', () => {
+  stopBackend()
 })

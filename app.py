@@ -65,11 +65,15 @@ def _script_status(name: str) -> dict:
 
 def _launch_scanner(url: str) -> tuple[dict, int]:
     """Start the Gemini scanner subprocess."""
+    print(f"[_launch_scanner] Received URL: {url!r}")
     clean_url = (url or "").strip()
     if not clean_url:
         return {"error": "url is required"}, 400
     if not clean_url.startswith(("http://", "https://")):
         clean_url = f"https://{clean_url}"
+
+    print(f"[_launch_scanner] Cleaned URL: {clean_url!r}")
+    print(f"[_launch_scanner] Spawning: {sys.executable} {SCANNER_SCRIPT} {clean_url}")
 
     if RESULTS_FILE.exists():
         RESULTS_FILE.unlink()
@@ -90,17 +94,17 @@ def _launch_scanner(url: str) -> tuple[dict, int]:
 
 @app.route("/start", methods=["GET", "POST"])
 def start():
+    if request.method == "POST":
+        # URL provided — launch scanner only, no mic needed
+        body = request.get_json(silent=True) or {}
+        scanner_status, code = _launch_scanner(body.get("url", ""))
+        return jsonify({"scanner": scanner_status}), code
+
+    # No URL — start voice pipeline (mic + listener) so user can speak a URL
     payload = {
         "capture": _start_script("capture", CAPTURE_SCRIPT),
         "open_url": _start_script("open_url", OPEN_URL_SCRIPT),
     }
-
-    if request.method == "POST":
-        body = request.get_json(silent=True) or {}
-        scanner_status, code = _launch_scanner(body.get("url", ""))
-        payload["scanner"] = scanner_status
-        return jsonify(payload), code
-
     return jsonify(payload)
 
 

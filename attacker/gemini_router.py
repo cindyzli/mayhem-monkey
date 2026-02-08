@@ -470,6 +470,8 @@ def attack_page(url: str, threat_summary: str = "") -> None:
 
 def main(url: Optional[str] = None, threat_summary: str = "") -> None:
     global last_action
+    print(f"[gemini_router main] Received URL arg: {url!r}")
+
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not set in .env")
@@ -480,6 +482,8 @@ def main(url: Optional[str] = None, threat_summary: str = "") -> None:
         raise SystemExit("URL is required")
     if not url.startswith(("http://", "https://")):
         url = f"https://{url}"
+
+    print(f"[gemini_router main] Final URL for browser: {url!r}")
 
     # --- Gemini chat session ---
     client = genai.Client(api_key=api_key)

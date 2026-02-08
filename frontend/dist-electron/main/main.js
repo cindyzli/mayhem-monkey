@@ -1,7 +1,35 @@
 "use strict";
 const electron = require("electron");
 const path = require("path");
+const child_process = require("child_process");
 let scannerWindow = null;
+let backendProcess = null;
+const PROJECT_ROOT = path.join(__dirname, "..", "..", "..");
+const BACKEND_SCRIPT = path.join(PROJECT_ROOT, "app.py");
+const startBackend = () => {
+  if (backendProcess) return;
+  console.log("[backend] Starting app.py from:", BACKEND_SCRIPT);
+  backendProcess = child_process.spawn("python3", [BACKEND_SCRIPT], {
+    cwd: PROJECT_ROOT,
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  backendProcess.stdout?.on("data", (data) => {
+    console.log(`[backend] ${data.toString().trimEnd()}`);
+  });
+  backendProcess.stderr?.on("data", (data) => {
+    console.error(`[backend] ${data.toString().trimEnd()}`);
+  });
+  backendProcess.on("exit", (code) => {
+    console.log(`[backend] app.py exited with code ${code}`);
+    backendProcess = null;
+  });
+};
+const stopBackend = () => {
+  if (!backendProcess) return;
+  console.log("[backend] Stopping app.py");
+  backendProcess.kill("SIGTERM");
+  backendProcess = null;
+};
 const createWindow = () => {
   console.log("=== CREATING MAIN WINDOW ===");
   const mainWindow = new electron.BrowserWindow({
@@ -64,6 +92,7 @@ const closeScannerWindow = () => {
 };
 electron.app.whenReady().then(() => {
   console.log("=== APP STARTING ===");
+  startBackend();
   createWindow();
   electron.ipcMain.handle("open-scanner", () => {
     console.log("=== IPC: open-scanner called ===");
@@ -82,4 +111,7 @@ electron.app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     electron.app.quit();
   }
+});
+electron.app.on("will-quit", () => {
+  stopBackend();
 });
