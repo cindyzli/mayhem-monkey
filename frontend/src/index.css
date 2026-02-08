@@ -568,8 +568,20 @@
     height: calc(var(--spacing) * 6);
   }
 
+  .h-8 {
+    height: calc(var(--spacing) * 8);
+  }
+
   .h-12 {
     height: calc(var(--spacing) * 12);
+  }
+
+  .h-16 {
+    height: calc(var(--spacing) * 16);
+  }
+
+  .h-20 {
+    height: calc(var(--spacing) * 20);
   }
 
   .h-full {
@@ -600,8 +612,20 @@
     width: calc(var(--spacing) * 6);
   }
 
+  .w-8 {
+    width: calc(var(--spacing) * 8);
+  }
+
   .w-12 {
     width: calc(var(--spacing) * 12);
+  }
+
+  .w-16 {
+    width: calc(var(--spacing) * 16);
+  }
+
+  .w-20 {
+    width: calc(var(--spacing) * 20);
   }
 
   .w-full {
@@ -949,16 +973,6 @@
   .bg-gradient-to-br {
     --tw-gradient-position: to bottom right in oklab;
     background-image: linear-gradient(var(--tw-gradient-stops));
-  }
-
-  .from-purple-600 {
-    --tw-gradient-from: var(--color-purple-600);
-    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
-  }
-
-  .to-pink-600 {
-    --tw-gradient-to: var(--color-pink-600);
-    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
   }
 
   .p-2 {
