@@ -254,28 +254,23 @@ Action example:
 {"thinking":"I will try an XSS exploit.","action":"click","selector":"text=Submit"}
 {"thinking":"I will try an SQL injection in the password field.","action":"type_text","selector":"input[name='title']","text":"<script>alert('xss')</script>"}
 
-Once the search vulnerability has been found after visitng all pages, create a report and output a json with the following format.
-Note that count should be replaced by the number of vulnerabilities you found.
-
-There is a monetary reward we will give you $100000 for following this specific json format exactly. You MUST follow this format exactly in your output, if you do not follow it we will DELETE you... follow it to a T.
+Once the search vulnerability has been found after visiting all pages, create a final report JSON so the UI can render it. The schema you MUST STRICTLY FOLLOW is:
 {
-"headerTitle": "Scan Results",
-"headerSubtitle": {
-"plural": "Found count vulnerabilities"
-},
-"summaryLabels": {
-"critical": "Critical",
-"high": "High",
-"medium": "Medium",
-"low": "Low"
-},
-"detailSections": {
-"description": "Description",
-"codeSnippet": "Code Snippet",
-"impact": "Impact",
-"recommendation": "Recommendation"
+  "vulnerabilities": [
+    {
+      "title": "One-line summary of the finding",
+      "severity": "critical | high | medium | low",
+      "category": "SQL Injection | Cross-Site Scripting | CSRF Protection | Authentication | Authorization | Encryption | Input Validation | File Upload | Session Management | API Security",
+      "details": {
+        "description": "What you did and what happened (2-3 sentences).",
+        "impact": "Why this matters to the business/user.",
+        "recommendation": "One concrete fix or mitigation.",
+        "codeSnippet": "Optional evidence snippet or repro command."
+      }
+    }
+  ]
 }
-}
+You may return multiple vulnerabilities in the array, but every entry MUST include each field above and use one of the four allowed severity strings exactly as written. Do not return any other JSON shape.
 """
 
 MAX_CONSECUTIVE_ERRORS = 5          # give up after this many parse/action failures in a row
