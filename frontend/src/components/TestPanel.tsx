@@ -5,6 +5,7 @@ interface TestPanelProps {
   onTestsChange: (tests: string[]) => void;
   onStartScan: () => void;
   isScanning: boolean;
+  isListening?: boolean;
   disabled?: boolean;
 }
 
@@ -21,7 +22,7 @@ const testCategories = [
   { id: 'api-security', name: 'API Security', description: 'Checks API vulnerabilities' },
 ];
 
-export function TestPanel({ selectedTests, onTestsChange, onStartScan, isScanning, disabled }: TestPanelProps) {
+export function TestPanel({ selectedTests, onTestsChange, onStartScan, isScanning, isListening, disabled }: TestPanelProps) {
   const toggleTest = (testId: string) => {
     if (selectedTests.includes(testId)) {
       onTestsChange(selectedTests.filter(id => id !== testId));
@@ -52,7 +53,7 @@ export function TestPanel({ selectedTests, onTestsChange, onStartScan, isScannin
           className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white px-4 py-3 rounded-lg font-medium transition-colors shadow-lg"
         >
           <Play className="w-5 h-5" />
-          {isScanning ? 'Listening for URL...(pls speak)' : 'Start Vulnerability Scan'}
+          {isListening ? 'Listening to URL...' : isScanning ? 'Scanning...' : 'Start Vulnerability Scan'}
         </button>
 
         <div className="flex items-center justify-between text-sm">
