@@ -60,24 +60,20 @@ def _script_status(name: str) -> dict:
 
 # --- Routes ---
 
-@app.route("/start/capture", methods=["POST"])
-def start_capture():
-    return jsonify(_start_script("capture", CAPTURE_SCRIPT))
+@app.route("/start", methods=["POST"])
+def start():
+    return jsonify({
+        "capture": _start_script("capture", CAPTURE_SCRIPT),
+        "open_url": _start_script("open_url", OPEN_URL_SCRIPT),
+    })
 
 
-@app.route("/stop/capture", methods=["POST"])
-def stop_capture():
-    return jsonify(_stop_script("capture"))
-
-
-@app.route("/start/open_url", methods=["POST"])
-def start_open_url():
-    return jsonify(_start_script("open_url", OPEN_URL_SCRIPT))
-
-
-@app.route("/stop/open_url", methods=["POST"])
-def stop_open_url():
-    return jsonify(_stop_script("open_url"))
+@app.route("/stop", methods=["POST"])
+def stop():
+    return jsonify({
+        "capture": _stop_script("capture"),
+        "open_url": _stop_script("open_url"),
+    })
 
 
 @app.route("/status", methods=["GET"])
