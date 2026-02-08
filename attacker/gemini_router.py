@@ -474,6 +474,7 @@ def main(url: Optional[str] = None, threat_summary: str = "") -> None:
     print(f"[gemini_router main] Received URL arg: {url!r}")
 
     api_key = os.getenv("GEMINI_API_KEY")
+    print(api_key)
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not set in .env")
 
