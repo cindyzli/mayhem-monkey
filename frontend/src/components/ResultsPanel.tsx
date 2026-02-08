@@ -107,7 +107,7 @@ export function ResultsPanel({ vulnerabilities, config = defaultResultsPanelConf
         </div>
       </div>
 
-      <div className="divide-y divide-gray-700 max-h-[600px] overflow-y-auto">
+      <div className="divide-y divide-gray-700 max-h-[400px] overflow-y-auto">
         {vulnerabilities.map((vuln) => {
           const severity = severityConfig[vuln.severity];
           const Icon = severity.icon;
@@ -119,7 +119,9 @@ export function ResultsPanel({ vulnerabilities, config = defaultResultsPanelConf
                 onClick={() => toggleExpand(vuln.id)}
                 className="w-full text-left"
               >
+              <div className="flex flex-col">
                 <div className="flex items-start gap-3">
+
                   <div className={`p-2 rounded-lg ${severity.bg} ${severity.border} border flex-shrink-0`}>
                     <Icon className={`w-5 h-5 ${severity.color}`} />
                   </div>
@@ -140,24 +142,25 @@ export function ResultsPanel({ vulnerabilities, config = defaultResultsPanelConf
                           </span>
                         </div>
                       </div>
-                      {isExpanded ? (
-                        <ChevronUp className="w-5 h-5 text-gray-500 flex-shrink-0" />
-                      ) : (
-                        <ChevronDown className="w-5 h-5 text-gray-500 flex-shrink-0" />
-                      )}
+                        {isExpanded ? (
+                          <ChevronUp className="w-5 h-5 text-gray-500 flex-shrink-0" />
+                        ) : (
+                          <ChevronDown className="w-5 h-5 text-gray-500 flex-shrink-0" />
+                        )}
+                      </div>
                     </div>
-
-                    {!isExpanded && (
-                      <p className="text-sm text-gray-400 mt-2 line-clamp-2">
-                        {vuln.description}
-                      </p>
-                    )}
                   </div>
+
+                  {!isExpanded && (
+                    <p className="text-sm text-gray-400 flex-1 mt-2 line-clamp-2">
+                      {vuln.description}
+                    </p>
+                  )}
                 </div>
               </button>
 
               {isExpanded && (
-                <div className="mt-4 ml-14 space-y-4">
+                <div className="mt-4 space-y-4">
                   <div>
                     <h5 className="text-sm font-medium text-gray-300 mb-1.5">{config.detailSections.description}</h5>
                     <p className="text-sm text-gray-400 leading-relaxed">{vuln.description}</p>

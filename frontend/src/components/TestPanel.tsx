@@ -44,7 +44,7 @@ export function TestPanel({ selectedTests, onTestsChange, onStartScan, isScannin
         <span className="font-medium text-white">Test Configuration</span>
       </div>
 
-      <div className="p-4 space-y-4">
+      <div className="p-4 space-y-4 flex flex-col" style={{ height: '400px' }}>
         <button
           onClick={onStartScan}
           disabled={isScanning || selectedTests.length === 0}
@@ -75,7 +75,7 @@ export function TestPanel({ selectedTests, onTestsChange, onStartScan, isScannin
           </div>
         </div>
 
-        <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+        <div className="space-y-2 overflow-y-auto pr-2 flex-1">
           {testCategories.map(test => (
             <label
               key={test.id}
