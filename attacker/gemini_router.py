@@ -423,7 +423,6 @@ def main(url: Optional[str] = None, threat_summary: str = "") -> None:
     client = genai.Client(api_key=api_key)
     chat = client.chats.create(
         model="gemini-2.5-pro",
-        model="gemini-2.5-pro",
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_PROMPT,
             temperature=0.7,
@@ -526,7 +525,8 @@ def main(url: Optional[str] = None, threat_summary: str = "") -> None:
 
 if __name__ == "__main__":
     try:
-        main()
+        url = sys.argv[1] if len(sys.argv) > 1 else None
+        main(url=url)
     except KeyboardInterrupt:
         print("\nInterrupted by user.")
     except Exception as exc:
