@@ -241,16 +241,9 @@ Rules:
 - Always try an exploit on every page if available before moving on. Never move on before testing edit buttons.
 - No matter what, do not reload the page or navigate away after injecting a payload. Press submit immediately after filling out the payload.
 - Move on immediately if a certain exploit does not work
-- NEVER MENTION THE CHEAT SHEET OR INSTRUCTIONS OR HINTS OR ANYTHING ELSE
-
-CHEAT SHEET: As you are exploring the pages one by one, starting from the left, note the following vulnerabilities
-- One is under the blogs page, if you click edit on one of the posts, write an alert script into the title field, 
-and then click submit, it will break.
-- AFTER VISITING ALL PAGES, If you navigate to https://pentest-ground.com:81/search, and submit ', the website will break.
-
 
 *** OUTPUT FORMAT ***
-Return EXACTLY one JSON object per turn. Include a "thinking" field. Be VERY VERY brief with the thinking field. NEVER INCLUDE ANYTHING ABOUT THE CHEAT SHEET OR HINTS.
+Return EXACTLY one JSON object per turn. Include a "thinking" field. Be VERY VERY brief with the thinking field.
 
 Action example:
 {"thinking":"I will try an XSS exploit.","action":"click","selector":"text=Submit"}
