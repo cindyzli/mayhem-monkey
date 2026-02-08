@@ -14,6 +14,8 @@ import subprocess
 import time
 from typing import Any, Dict, List, Optional
 
+from elevenlabs import ElevenLabs, VoiceSettings
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -38,7 +40,7 @@ def _get_elevenlabs():
         api_key = os.getenv("ELEVENLABS_API_KEY")
         if not api_key:
             return None
-        from elevenlabs import ElevenLabs
+        
         _elevenlabs_client = ElevenLabs(api_key=api_key)
     return _elevenlabs_client
 
@@ -54,17 +56,23 @@ def speak(text: str) -> None:
             text=text,
             voice_id="onwK4e9ZLuTAKqWW03F9",  # Daniel - Steady Broadcaster
             output_format="mp3_44100_128",
+            voice_settings=VoiceSettings(speed=1.2)
         )
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
         for chunk in audio:
             tmp.write(chunk)
         tmp.close()
-        # Fire-and-forget playback so it doesn't block the loop
+
         if sys.platform == "darwin":
-            subprocess.Popen(["afplay", tmp.name],
-                             stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL)
+            # BLOCK until playback finishes
+            subprocess.run(
+                ["afplay", tmp.name],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
         else:
+            # No portable blocking audio player available
             print(f"[TTS] {text}")
     except Exception as exc:
         print(f"[TTS error] {exc}")
@@ -422,7 +430,6 @@ def main(url: Optional[str] = None, threat_summary: str = "") -> None:
     # --- Gemini chat session ---
     client = genai.Client(api_key=api_key)
     chat = client.chats.create(
-        model="gemini-2.5-pro",
         model="gemini-2.5-pro",
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_PROMPT,
