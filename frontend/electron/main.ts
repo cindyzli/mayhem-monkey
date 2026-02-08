@@ -53,7 +53,6 @@ const createWindow = () => {
   const devServerUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173'
   if (process.env.NODE_ENV !== 'production' || process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(devServerUrl)
-    mainWindow.webContents.openDevTools()
   } else {
     mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
   }
@@ -86,13 +85,12 @@ const createScannerWindow = () => {
   // Load the scanner window
   const devServerUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173'
   const scannerUrl = `${devServerUrl}/scanner.html`
-  
+
   console.log('Loading scanner from:', scannerUrl)
-  
+
   scannerWindow.loadURL(scannerUrl).then(() => {
     console.log('Scanner window loaded successfully')
     scannerWindow?.show()
-    scannerWindow?.webContents.openDevTools()
   }).catch((err) => {
     console.error('Failed to load scanner:', err)
   })
