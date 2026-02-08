@@ -28,7 +28,7 @@ const createScannerWindow = () => {
   }
   const { width: screenWidth } = electron.screen.getPrimaryDisplay().workAreaSize;
   const windowWidth = 450;
-  const windowHeight = 820;
+  const windowHeight = 840;
   scannerWindow = new electron.BrowserWindow({
     width: windowWidth,
     height: windowHeight,
