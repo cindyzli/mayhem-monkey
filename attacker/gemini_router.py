@@ -188,13 +188,19 @@ def _execute_action(page, data: Dict[str, Any]) -> str:
     return f"Unknown action '{action}'"
 
 
-def main() -> None:
+def attack_page(url: str, threat_summary: str = "") -> None:
+    """Launch the Gemini chaos-monkey loop against a single page."""
+    main(url=url, threat_summary=threat_summary)
+
+
+def main(url: Optional[str] = None, threat_summary: str = "") -> None:
     global last_action
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not set in .env")
 
-    url = input("Enter target URL: ").strip()
+    if url is None:
+        url = input("Enter target URL: ").strip()
     if not url:
         raise SystemExit("URL is required")
     if not url.startswith(("http://", "https://")):

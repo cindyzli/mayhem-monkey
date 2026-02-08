@@ -1,27 +1,37 @@
 import os
 import sys
-import hashlib
 import argparse
 from urllib.parse import urljoin, urlparse, urldefrag
 from collections import deque
 
 import requests
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
+from google import genai
+
+# Allow importing from sibling packages
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from attacker.gemini_router import attack_page
+
+load_dotenv()
 
 
-def sanitize_filename(url):
-    """Convert a URL into a safe filename."""
-    parsed = urlparse(url)
-    path = parsed.path.strip("/").replace("/", "_") or "index"
-    if parsed.query:
-        path += "_" + hashlib.md5(parsed.query.encode()).hexdigest()[:8]
-    if not path.endswith(".html"):
-        path += ".html"
-    return path
+def evaluate_vulnerabilities(html: str) -> str:
+    """Ask Gemini to evaluate a page's HTML for potential security vulnerabilities."""
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        print("  [WARN] GEMINI_API_KEY not set, skipping vulnerability evaluation")
+        return ""
+    client = genai.Client(api_key=api_key)
+    response = client.models.generate_content(
+        model="gemini-2.5-pro",
+        contents=f"Evaluate this page for any potential security vulnerabilities:\n\n{html[:15000]}",
+    )
+    return response.text.strip()
 
 
-def crawl(start_url, output_dir="crawled_pages", max_pages=100):
-    """Crawl a website starting from start_url and save all HTML pages."""
+def crawl(start_url, max_pages=100):
+    """Crawl a website starting from start_url and attack each page."""
     parsed_start = urlparse(start_url)
     base_domain = parsed_start.netloc
 
@@ -29,11 +39,9 @@ def crawl(start_url, output_dir="crawled_pages", max_pages=100):
         print(f"Error: invalid URL '{start_url}'")
         sys.exit(1)
 
-    os.makedirs(output_dir, exist_ok=True)
-
     visited = set()
     queue = deque([start_url])
-    saved_count = 0
+    page_count = 0
 
     session = requests.Session()
     session.headers.update({
@@ -41,9 +49,8 @@ def crawl(start_url, output_dir="crawled_pages", max_pages=100):
     })
 
     print(f"Crawling {start_url} (domain: {base_domain})")
-    print(f"Saving HTML files to: {os.path.abspath(output_dir)}/")
 
-    while queue and saved_count < max_pages:
+    while queue and page_count < max_pages:
         url = queue.popleft()
         url = urldefrag(url).url  # strip fragment
 
@@ -61,13 +68,12 @@ def crawl(start_url, output_dir="crawled_pages", max_pages=100):
         if "text/html" not in content_type:
             continue
 
-        # Save the HTML file
-        filename = sanitize_filename(url)
-        filepath = os.path.join(output_dir, filename)
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(resp.text)
-        saved_count += 1
-        print(f"  [{saved_count}] Saved {url} -> {filename}")
+        page_count += 1
+        print(f"  [{page_count}] Evaluating {url} for vulnerabilities...")
+        threat_summary = evaluate_vulnerabilities(resp.text)
+        print(f"  Threat summary: {threat_summary[:200]}")
+        print(f"  Attacking {url}")
+        attack_page(url, threat_summary=threat_summary)
 
         # Parse and enqueue links
         soup = BeautifulSoup(resp.text, "html.parser")
@@ -81,15 +87,13 @@ def crawl(start_url, output_dir="crawled_pages", max_pages=100):
                 if link not in visited:
                     queue.append(link)
 
-    print(f"\nDone. Saved {saved_count} pages to {os.path.abspath(output_dir)}/")
-    return output_dir
+    print(f"\nDone. Attacked {page_count} pages.")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Crawl a website and save all HTML pages.")
+    parser = argparse.ArgumentParser(description="Crawl a website and attack each page.")
     parser.add_argument("url", help="The starting URL to crawl")
-    parser.add_argument("-o", "--output", default="crawled_pages", help="Output directory (default: crawled_pages)")
     parser.add_argument("-m", "--max-pages", type=int, default=100, help="Max pages to crawl (default: 100)")
     args = parser.parse_args()
 
-    crawl(args.url, output_dir=args.output, max_pages=args.max_pages)
+    crawl(args.url, max_pages=args.max_pages)
