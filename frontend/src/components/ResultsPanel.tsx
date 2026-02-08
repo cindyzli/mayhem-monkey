@@ -62,6 +62,19 @@ const severityConfig: Record<Severity, {
 
 export function ResultsPanel({ vulnerabilities, config = defaultResultsPanelConfig }: ResultsPanelProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const mergedConfig = {
+    headerTitle: config?.headerTitle ?? 'Scan Results',
+    headerSubtitle: {
+      singular: config?.headerSubtitle?.singular ?? 'Found {count} vulnerability',
+      plural: config?.headerSubtitle?.plural ?? 'Found {count} vulnerabilities',
+    },
+    detailSections: {
+      description: config?.detailSections?.description ?? 'Description',
+      codeSnippet: config?.detailSections?.codeSnippet ?? 'Evidence',
+      impact: config?.detailSections?.impact ?? 'Impact',
+      recommendation: config?.detailSections?.recommendation ?? 'Recommendation',
+    },
+  };
 
   const toggleExpand = (id: string) => {
     const newExpanded = new Set(expandedIds);
@@ -77,7 +90,9 @@ export function ResultsPanel({ vulnerabilities, config = defaultResultsPanelConf
   const highCount = vulnerabilities.filter(v => v.severity === 'high').length;
   const mediumCount = vulnerabilities.filter(v => v.severity === 'medium').length;
   const lowCount = vulnerabilities.filter(v => v.severity === 'low').length;
-  const subtitleTemplate = vulnerabilities.length === 1 ? config.headerSubtitle.singular : config.headerSubtitle.plural;
+  const subtitleTemplate = vulnerabilities.length === 1
+    ? mergedConfig.headerSubtitle.singular
+    : mergedConfig.headerSubtitle.plural;
   const subtitle = subtitleTemplate.replace('{count}', String(vulnerabilities.length));
 
   return (
@@ -85,7 +100,7 @@ export function ResultsPanel({ vulnerabilities, config = defaultResultsPanelConf
       <div className="px-4 py-3 border-b border-gray-700 bg-gray-800/30">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-medium text-lg text-white">{config.headerTitle}</h3>
+            <h3 className="font-medium text-lg text-white">{mergedConfig.headerTitle}</h3>
             <p className="text-sm text-gray-400 mt-0.5">
               {subtitle}
             </p>
@@ -115,7 +130,7 @@ export function ResultsPanel({ vulnerabilities, config = defaultResultsPanelConf
 
       <div className="divide-y divide-gray-700 max-h-[400px] overflow-y-auto">
         {vulnerabilities.map((vuln) => {
-          const severity = severityConfig[vuln.severity];
+          const severity = severityConfig[vuln.severity] ?? severityConfig.medium;
           const Icon = severity.icon;
           const isExpanded = expandedIds.has(vuln.id);
 
@@ -170,24 +185,24 @@ export function ResultsPanel({ vulnerabilities, config = defaultResultsPanelConf
               {isExpanded && (
                 <div className="mt-4 space-y-4">
                   <div>
-                    <h5 className="text-sm font-medium text-gray-300 mb-1.5">{config.detailSections.description}</h5>
+                    <h5 className="text-sm font-medium text-gray-300 mb-1.5">{mergedConfig.detailSections.description}</h5>
                     <p className="text-sm text-gray-400 leading-relaxed">{vuln.description}</p>
                   </div>
 
                   <div>
-                    <h5 className="text-sm font-medium text-gray-300 mb-1.5">{config.detailSections.codeSnippet}</h5>
+                    <h5 className="text-sm font-medium text-gray-300 mb-1.5">{mergedConfig.detailSections.codeSnippet}</h5>
                     <pre className="bg-gray-950 border border-gray-700 rounded-lg p-3 text-sm text-gray-300 overflow-x-auto">
                       <code>{vuln.codeSnippet}</code>
                     </pre>
                   </div>
 
                   <div>
-                    <h5 className="text-sm font-medium text-gray-300 mb-1.5">{config.detailSections.impact}</h5>
+                    <h5 className="text-sm font-medium text-gray-300 mb-1.5">{mergedConfig.detailSections.impact}</h5>
                     <p className="text-sm text-gray-400 leading-relaxed">{vuln.impact}</p>
                   </div>
 
                   <div>
-                    <h5 className="text-sm font-medium text-gray-300 mb-1.5">{config.detailSections.recommendation}</h5>
+                    <h5 className="text-sm font-medium text-gray-300 mb-1.5">{mergedConfig.detailSections.recommendation}</h5>
                     <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
                       <p className="text-sm text-gray-300 leading-relaxed">{vuln.recommendation}</p>
                     </div>
