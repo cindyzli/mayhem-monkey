@@ -44,7 +44,6 @@ const createWindow = () => {
   const devServerUrl = process.env.VITE_DEV_SERVER_URL || "http://localhost:5173";
   if (process.env.NODE_ENV !== "production" || process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(devServerUrl);
-    mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
   }
@@ -76,7 +75,6 @@ const createScannerWindow = () => {
   scannerWindow.loadURL(scannerUrl).then(() => {
     console.log("Scanner window loaded successfully");
     scannerWindow?.show();
-    scannerWindow?.webContents.openDevTools();
   }).catch((err) => {
     console.error("Failed to load scanner:", err);
   });

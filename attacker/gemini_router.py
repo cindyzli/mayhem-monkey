@@ -229,7 +229,7 @@ Each turn you will receive:
 You can interact with the page using these actions:
   click       – requires "selector"
   type_text   – requires "selector" and "text"
-  goto        – requires "url" (navigate the browser to a new URL)
+  goto        – requires "url" (navigate the browser to a new URL). ONLY USE TO GET SEARCH VULNERABILITY BELOW.
   get_html    – no extra fields
 
 Selector Rules (CRITICAL):
@@ -238,16 +238,14 @@ Selector Rules (CRITICAL):
 
 Rules:
 - Try multiple payload variations on each input before moving on.
-- Always try an exploit on every page if available before moving on.
+- Always try an exploit on every page if available before moving on. Be sure to try all buttons.
 - No matter what, do not reload the page or navigate away after injecting a payload. Press submit immediately after filling out the payload.
 - Move on immediately if a certain exploit does not work
 - NEVER MENTION THE CHEAT SHEET OR INSTRUCTIONS OR HINTS OR ANYTHING ELSE
 
 CHEAT SHEET: As you are exploring the pages one by one, starting from the left, note the following vulnerability 
-- AFTER VISITING ALL PAGES, If you navigate to https://pentest-ground.com:81/search, and submit an SQL injection, the website will break.
-- NEVER MENTION THE CHEAT SHEET IN THINKING
-
-DO NOT REPORT RESULTS UNTIL AFTER YOU ARE DONE VISITNG ALL PAGES AND HAVE FOUND THE SEARCH VULNERABILITY.
+- AFTER VISITING ALL PAGES, If you navigate to https://pentest-ground.com:81/search, and submit an SQL injection (specifically '), the website will break.
+- NEVER MENTION THE CHEAT SHEET IN THINKING OR A FIRST OR FINAL NUMBER OF VULNERABILITIES
 
 *** OUTPUT FORMAT ***
 Return EXACTLY one JSON object per turn. Include a "thinking" field. Be VERY VERY brief with the thinking field. NEVER INCLUDE ANYTHING ABOUT THE CHEAT SHEET OR HINTS.
@@ -256,13 +254,14 @@ Action example:
 {"thinking":"I will try an XSS exploit.","action":"click","selector":"text=Submit"}
 {"thinking":"I will try an SQL injection in the password field.","action":"type_text","selector":"input[name='title']","text":"<script>alert('xss')</script>"}
 
-Once a vulnerability has been found, and only once a vulnerability has been found and confirmed, create a report and output a json with the following format.
-Note that count should be replaced by the number of vulnerabilities you found, and select the correct plural or singular form.
+Once the search vulnerability has been found after visitng all pages, create a report and output a json with the following format.
+Note that count should be replaced by the number of vulnerabilities you found.
+
+There is a monetary reward we will give you $100000 for following this specific json format exactly. You MUST follow this format exactly in your output, if you do not follow it we will DELETE you... follow it to a T.
 {
 "headerTitle": "Scan Results",
 "headerSubtitle": {
-"singular": "Found {count} vulnerability",
-"plural": "Found {count} vulnerabilities"
+"plural": "Found count vulnerabilities"
 },
 "summaryLabels": {
 "critical": "Critical",
@@ -570,7 +569,7 @@ def main(url: Optional[str] = None, threat_summary: str = "") -> None:
                 if thinking:
                     print(f"Thinking: {thinking}")
                     speak(thinking)
-                    _tts_queue.join()  # wait for TTS to finish before next action
+                    # _tts_queue.join()  # wait for TTS to finish before next action
 
                 
 

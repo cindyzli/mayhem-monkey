@@ -19,7 +19,7 @@ BASE_DIR = pathlib.Path(__file__).resolve().parent
 CAPTURE_SCRIPT = str(BASE_DIR / "voice" / "capture.py")
 OPEN_URL_SCRIPT = str(BASE_DIR / "voice" / "open_url.py")
 SCANNER_SCRIPT = str(BASE_DIR / "attacker" / "gemini_router.py")
-RESULTS_FILE = BASE_DIR / "results" / "scan_results.json"
+RESULTS_FILE = str(BASE_DIR / "results" / "scan_results.json")
 
 # Track running subprocesses
 _processes: dict[str, subprocess.Popen] = {}
@@ -75,8 +75,8 @@ def _launch_scanner(url: str) -> tuple[dict, int]:
     print(f"[_launch_scanner] Cleaned URL: {clean_url!r}")
     print(f"[_launch_scanner] Spawning: {sys.executable} {SCANNER_SCRIPT} {clean_url}")
 
-    if RESULTS_FILE.exists():
-        RESULTS_FILE.unlink()
+    if os.path.exists(RESULTS_FILE):
+        os.remove(RESULTS_FILE)
 
     proc = _processes.get("scanner")
     if proc and proc.poll() is None:
@@ -136,12 +136,13 @@ def status():
 
 @app.route("/results", methods=["GET"])
 def results():
-    if not RESULTS_FILE.exists():
+    if not os.path.exists(RESULTS_FILE):
         return jsonify({"status": "pending", "message": "No results yet"}), 202
     try:
         with open(RESULTS_FILE) as f:
             data = json.load(f)
-        return jsonify({"status": "complete", "data": data})
+            print(f"data: {data}")
+        return jsonify({"status": "complete", "data": data}), 800
     except (json.JSONDecodeError, OSError) as exc:
         return jsonify({"status": "error", "message": str(exc)}), 500
 
@@ -163,7 +164,7 @@ def scan_status():
     running = proc is not None and proc.poll() is None
     return jsonify({
         "running": running,
-        "has_results": RESULTS_FILE.exists(),
+        "has_results": os.path.exists(RESULTS_FILE),
     })
 
 
