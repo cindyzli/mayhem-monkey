@@ -1,19 +1,26 @@
 {
-  "headerTitle": "Scan Results",
-  "headerSubtitle": {
-    "singular": "Found {count} vulnerability",
-    "plural": "Found {count} vulnerabilities"
-  },
-  "summaryLabels": {
-    "critical": "Critical",
-    "high": "High",
-    "medium": "Medium",
-    "low": "Low"
-  },
-  "detailSections": {
-    "description": "Description",
-    "codeSnippet": "Evidence",
-    "impact": "Impact",
-    "recommendation": "Recommendation"
-  }
+  "vulnerabilities": [
+    {
+      "title": "Stored XSS in blog comments",
+      "severity": "high",
+      "category": "Cross-Site Scripting",
+      "details": {
+        "description": "Submitting `<script>alert('xss')</script>` in the comment form is reflected when viewing any blog post.",
+        "impact": "Any visitor’s browser executes attacker-controlled JavaScript.",
+        "recommendation": "HTML-encode comment output or strip disallowed tags before saving.",
+        "codeSnippet": "POST /comments payload included <script> which rendered unescaped on /blog/123."
+      }
+    },
+    {
+      "title": "Weak admin password policy",
+      "severity": "medium",
+      "category": "Authentication",
+      "details": {
+        "description": "Password field accepts values as short as 4 characters.",
+        "impact": "Brute-force attacks are feasible; accounts can be compromised quickly.",
+        "recommendation": "Require at least 12 characters and enforce complexity/lockout rules.",
+        "codeSnippet": "Signup form accepted `pass` during automated testing."
+      }
+    }
+  ]
 }

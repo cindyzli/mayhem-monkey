@@ -1,4 +1,5 @@
 import { AlertTriangle, AlertOctagon, AlertCircle, Info, ChevronDown, ChevronUp, CheckCircle } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import type { Vulnerability, Severity } from './VulnerabilityScanner';
 import defaultResultsPanelConfig from '../data/resultsPanelConfig.json';
@@ -14,7 +15,6 @@ interface ResultsPanelConfig {
     singular: string;
     plural: string;
   };
-  summaryLabels: Record<Severity, string>;
   detailSections: {
     description: string;
     codeSnippet: string;
@@ -23,7 +23,13 @@ interface ResultsPanelConfig {
   };
 }
 
-const severityConfig = {
+const severityConfig: Record<Severity, {
+  icon: LucideIcon;
+  color: string;
+  bg: string;
+  border: string;
+  label: string;
+}> = {
   critical: {
     icon: AlertOctagon,
     color: 'text-red-400',
@@ -91,19 +97,19 @@ export function ResultsPanel({ vulnerabilities, config = defaultResultsPanelConf
       <div className="grid grid-cols-4 gap-3 p-4 border-b border-gray-700">
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-center">
           <div className="text-2xl font-bold text-red-400">{criticalCount}</div>
-          <div className="text-xs text-gray-400 mt-1">{config.summaryLabels.critical}</div>
+          <div className="text-xs text-gray-400 mt-1">{severityConfig.critical.label}</div>
         </div>
         <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 text-center">
           <div className="text-2xl font-bold text-orange-400">{highCount}</div>
-          <div className="text-xs text-gray-400 mt-1">{config.summaryLabels.high}</div>
+          <div className="text-xs text-gray-400 mt-1">{severityConfig.high.label}</div>
         </div>
         <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-center">
           <div className="text-2xl font-bold text-yellow-400">{mediumCount}</div>
-          <div className="text-xs text-gray-400 mt-1">{config.summaryLabels.medium}</div>
+          <div className="text-xs text-gray-400 mt-1">{severityConfig.medium.label}</div>
         </div>
         <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 text-center">
           <div className="text-2xl font-bold text-blue-400">{lowCount}</div>
-          <div className="text-xs text-gray-400 mt-1">{config.summaryLabels.low}</div>
+          <div className="text-xs text-gray-400 mt-1">{severityConfig.low.label}</div>
         </div>
       </div>
 
@@ -132,7 +138,7 @@ export function ResultsPanel({ vulnerabilities, config = defaultResultsPanelConf
                         <h4 className="font-medium text-gray-100">{vuln.title}</h4>
                         <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${severity.bg} ${severity.color} border ${severity.border}`}>
-                            {config.summaryLabels[vuln.severity]}
+                            {severity.label}
                           </span>
                           {vuln.line > 0 && (
                             <span className="text-xs text-gray-500">
