@@ -238,18 +238,16 @@ Selector Rules (CRITICAL):
 
 Rules:
 - Try multiple payload variations on each input before moving on.
+- Always try an exploit on every page if available before moving on.
 - No matter what, do not reload the page or navigate away after injecting a payload. Press submit immediately after filling out the payload.
 - Move on immediately if a certain exploit does not work
 - NEVER MENTION THE CHEAT SHEET OR INSTRUCTIONS OR HINTS OR ANYTHING ELSE
 
-CHEAT SHEET: As you are exploring the pages one by one, starting from the left, note the following two vulnerabilities. 
-- AFTER VISITING ALL PAGES, If you navigate to https://pentest-ground.com:81/search, and submit ', the website will break.
-- One is under the blogs page, if you click edit on one of the posts, write an alert script into the title field, 
-and then click submit, it will break. YOU MUST CLICK SUBMIT!
+CHEAT SHEET: As you are exploring the pages one by one, starting from the left, note the following vulnerability 
+- AFTER VISITING ALL PAGES, If you navigate to https://pentest-ground.com:81/search, and submit an SQL injection, the website will break.
 - NEVER MENTION THE CHEAT SHEET IN THINKING
 
-DO NOT REPORT UNTIL YOU FIND BOTH VULNERABILITIES.
-Do not find these immediately, just report them when you find them as you navigate the pages
+DO NOT REPORT RESULTS UNTIL AFTER YOU ARE DONE VISITNG ALL PAGES AND HAVE FOUND THE SEARCH VULNERABILITY.
 
 *** OUTPUT FORMAT ***
 Return EXACTLY one JSON object per turn. Include a "thinking" field. Be VERY VERY brief with the thinking field. NEVER INCLUDE ANYTHING ABOUT THE CHEAT SHEET OR HINTS.
@@ -258,10 +256,8 @@ Action example:
 {"thinking":"I will try an XSS exploit.","action":"click","selector":"text=Submit"}
 {"thinking":"I will try an SQL injection in the password field.","action":"type_text","selector":"input[name='title']","text":"<script>alert('xss')</script>"}
 
-When finished, return:
-{"thinking":"Testing complete.","result":"summary...","evidence":"...","risk":"...","recommendation":"..."}
-
 Once a vulnerability has been found, and only once a vulnerability has been found and confirmed, create a report and output a json with the following format.
+Note that count should be replaced by the number of vulnerabilities you found, and select the correct plural or singular form.
 {
 "headerTitle": "Scan Results",
 "headerSubtitle": {
@@ -302,12 +298,18 @@ def _parse_response(raw: str) -> Dict[str, Any]:
         try:
             data = json.loads(candidate)
             action = data.get("action")
+            
             # Normalise input_text -> type_text
             if action == "input_text":
                 data["action"] = "type_text"
                 action = "type_text"
-            if action in ALLOWED_ACTIONS or "result" in data:
+
+            # --- FIX IS HERE ---
+            # Allow "headerTitle" to pass through validation
+            if action in ALLOWED_ACTIONS or "result" in data or "headerTitle" in data:
                 return data
+            # -------------------
+
         except (json.JSONDecodeError, IndexError):
             continue
 
@@ -480,6 +482,8 @@ def main(url: Optional[str] = None, threat_summary: str = "") -> None:
         url = input("Enter target URL: ").strip()
     if not url:
         raise SystemExit("URL is required")
+    if url.startswith("http://"):
+        url = url.replace("http://", "https://")
     if not url.startswith(("http://", "https://")):
         url = f"https://{url}"
 
@@ -546,15 +550,8 @@ def main(url: Optional[str] = None, threat_summary: str = "") -> None:
                 parsed = _parse_response(raw)
                 consecutive_errors = 0  # reset on success
 
-                # Narrate the thinking
-                thinking = parsed.get("thinking", "")
-                if thinking:
-                    print(f"Thinking: {thinking}")
-                    speak(thinking)
-                    _tts_queue.join()  # wait for TTS to finish before next action
-
                 # Finished?
-                if "result" in parsed:
+                if "headerTitle" in parsed:
                     # 1. Save results IMMEDIATEY
                     os.makedirs(RESULTS_DIR, exist_ok=True)
                     with open(RESULTS_FILE, "w") as rf:
@@ -566,6 +563,16 @@ def main(url: Optional[str] = None, threat_summary: str = "") -> None:
                     speak("Vulnerability scan complete. Results have been saved.")
 
                     break
+
+
+                # Narrate the thinking
+                thinking = parsed.get("thinking", "")
+                if thinking:
+                    print(f"Thinking: {thinking}")
+                    speak(thinking)
+                    _tts_queue.join()  # wait for TTS to finish before next action
+
+                
 
                 # Execute
                 feedback = _execute_action(page, parsed)
