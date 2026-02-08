@@ -300,7 +300,7 @@ def _parse_response(raw: str) -> Dict[str, Any]:
 
             # --- FIX IS HERE ---
             # Allow "headerTitle" to pass through validation
-            if action in ALLOWED_ACTIONS or "result" in data or "headerTitle" in data:
+            if action in ALLOWED_ACTIONS or "vulnerabilities" in data or "severity" in data:
                 return data
             # -------------------
 
@@ -469,7 +469,6 @@ def main(url: Optional[str] = None, threat_summary: str = "") -> None:
     print(f"[gemini_router main] Received URL arg: {url!r}")
 
     api_key = os.getenv("GEMINI_API_KEY")
-    print(api_key)
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not set in .env")
 
@@ -546,7 +545,7 @@ def main(url: Optional[str] = None, threat_summary: str = "") -> None:
                 consecutive_errors = 0  # reset on success
 
                 # Finished?
-                if "headerTitle" in parsed:
+                if "vulnerabilities" in parsed:
                     # 1. Save results IMMEDIATEY
                     os.makedirs(RESULTS_DIR, exist_ok=True)
                     with open(RESULTS_FILE, "w") as rf:
