@@ -1,30 +1,41 @@
 import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react-swc'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
   main: {
-    // Main process config
     build: {
       outDir: 'dist-electron/main',
       rollupOptions: {
-        input: 'electron/main.ts'
+        input: path.join(__dirname, 'electron/main.ts')
       }
     }
   },
   preload: {
-    // Preload scripts config
     build: {
       outDir: 'dist-electron/preload',
       rollupOptions: {
-        input: 'electron/preload.ts'
+        input: path.join(__dirname, 'electron/preload.ts')
       }
     }
   },
   renderer: {
-    // Renderer process (your existing React app)
+    root: __dirname,
     build: {
-      outDir: 'dist-electron/renderer'
+      outDir: 'dist-electron/renderer',
+      rollupOptions: {
+        input: {
+          index: path.join(__dirname, 'index.html'),
+          scanner: path.join(__dirname, 'scanner.html')
+        }
+      }
     },
-    plugins: [react()]
+    plugins: [react()],
+    server: {
+      port: 5173
+    }
   }
 })
