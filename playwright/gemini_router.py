@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 
 load_dotenv()
+last_action = ""
 
 # ---------------------------------------------------------------------------
 # Lazy imports for google.genai (require pip install google-genai)
@@ -180,20 +181,33 @@ def _collect_evidence(page, *, url_before: str) -> str:
 # ---------------------------------------------------------------------------
 ALLOWED_ACTIONS = {"get_html", "click", "type_text", "input_text"}
 
-SYSTEM_PROMPT = """\
+SCREENSHOT_DIR = os.path.join(os.path.dirname(__file__), "..", "screenshots")
+
+SYSTEM_PROMPT = """SYSTEM_PROMPT = \
 You are a senior security QA engineer testing a web application that you own \
 and have explicit permission to test.
 
 Goal:
 1) Identify whether the application is vulnerable to common input-handling \
 issues (SQLi, reflected/stored XSS, auth/session flaws, broken access control).
-2) Provide a clear reproduction path and evidence for any finding.
+2) You should always visually confirm results of any test
+3) Provide a clear reproduction path and evidence for any finding.
+
+Each turn you will receive:
+- A screenshot of the current page (use this to understand the visual layout).
+- Your previous action.
+- The page HTML.
+- If your last action was to submit, you should visually evaluate results
 
 You can interact with the page using these actions:
   click       – requires "selector"
   type_text   – requires "selector" and "text"
   get_html    – no extra fields
 
+Selector Rules (CRITICAL):
+- **Prefer text selectors**: Playwright can find elements by text. Use "text=Submit" or "text=Log In" instead of generic CSS.
+- **Avoid ambiguous CSS**: Do NOT use generic selectors like "button[type='submit']" or "input" if multiple exist.
+- **Be specific**: Use unique IDs (#id) or compound classes (.class.other) if text is unavailable.
 IMPORTANT — evidence capture:
 After every type_text the form is automatically submitted AND the runner \
 captures evidence for you: JS alert/confirm/prompt dialogs, console errors, \
@@ -214,14 +228,14 @@ Rules:
 - No matter what, do not reload the page or navigate away after injecting a payload. Press submit immediately after filling out the payload.
 
 *** OUTPUT FORMAT ***
-Return EXACTLY one JSON object per turn.  Include a short "thinking" field
-that explains your reasoning in 1-2 sentences (this will be spoken aloud).
+Return EXACTLY one JSON object per turn. Include a "thinking" field.
 
 Action example:
+{"thinking":"I will use the text selector to ensure I hit the main submit button.","action":"click","selector":"text=Submit"}
 {"thinking":"I'll try a basic XSS payload in the title field.","action":"type_text","selector":"input[name='title']","text":"<script>alert('xss')</script>"}
 
-When you are finished testing, return:
-{"thinking":"Testing complete.","result":"summary of findings","evidence":"...","repro_steps":["..."],"risk":"...","recommendation":"..."}
+When finished, return:
+{"thinking":"Testing complete.","result":"summary...","evidence":"...","risk":"...","recommendation":"..."}
 """
 
 MAX_CONSECUTIVE_ERRORS = 5          # give up after this many parse/action failures in a row
@@ -316,9 +330,11 @@ def _get_filled_input_summary(page) -> str:
 
 
 def _execute_action(page, data: Dict[str, Any]) -> str:
+    global last_action
     """Run the action on the live Playwright page and return a feedback string."""
     action = data.get("action")
-
+    last_action = f"last action: {data}"
+    
     if action == "get_html":
         html = page.content()
         filled = _get_filled_input_summary(page)
@@ -331,6 +347,12 @@ def _execute_action(page, data: Dict[str, Any]) -> str:
             return "Error: 'selector' is required for click"
         url_before = page.url
         try:
+            # strict=True forces an error if the selector matches multiple elements.
+            # This teaches the LLM to be more specific next time.
+            page.wait_for_selector(selector, state="visible", timeout=5000)
+            page.click(selector, timeout=5000, strict=True)
+            page.wait_for_load_state("domcontentloaded")
+            return f"Clicked '{selector}'. URL is now: {page.url}"
             page.wait_for_selector(selector, timeout=5000)
             page.click(selector, timeout=5000)
             time.sleep(1.0)  # let any AJAX / client-side updates settle
@@ -347,6 +369,14 @@ def _execute_action(page, data: Dict[str, Any]) -> str:
             return "Error: 'selector' and 'text' are required for type_text"
         url_before = page.url
         try:
+            page.wait_for_selector(selector, state="visible", timeout=5000)
+            # strict=True ensures we don't type into a hidden or wrong input
+            page.fill(selector, text, strict=True)
+            
+            if data.get("submit"):
+                page.press(selector, "Enter")
+                page.wait_for_load_state("domcontentloaded")
+            return f"Typed into '{selector}'. URL: {page.url}"
             page.wait_for_selector(selector, timeout=5000)
             page.fill(selector, text)
             result_msg = f"Typed '{text}' into '{selector}'."
@@ -372,6 +402,7 @@ def _execute_action(page, data: Dict[str, Any]) -> str:
 
 
 def main() -> None:
+    global last_action
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not set in .env")
@@ -386,6 +417,7 @@ def main() -> None:
     client = genai.Client(api_key=api_key)
     chat = client.chats.create(
         model="gemini-2.5-pro",
+        model="gemini-2.5-pro",
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_PROMPT,
             temperature=0.7,
@@ -393,6 +425,8 @@ def main() -> None:
     )
 
     speak(f"Starting chaos test on {url}")
+
+    os.makedirs(SCREENSHOT_DIR, exist_ok=True)
 
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=False)
@@ -412,7 +446,19 @@ def main() -> None:
             filled = _get_filled_input_summary(page)
             filled_note = f"\nCurrent input values: {filled}" if filled else ""
 
-            user_message = (
+            # Capture screenshot before each step
+            screenshot_path = os.path.join(SCREENSHOT_DIR, f"step_{step}.png")
+            screenshot_bytes = page.screenshot(full_page=True)
+            with open(screenshot_path, "wb") as f:
+                f.write(screenshot_bytes)
+            print(f"Screenshot saved: {screenshot_path}")
+
+            # Build multimodal message: screenshot image + HTML text
+            screenshot_part = types.Part.from_bytes(
+                data=screenshot_bytes,
+                mime_type="image/png",
+            )
+            text_part = (
                 f"Current page URL: {page.url}\n"
                 f"HTML (first 15000 chars):\n{html[:15000]}\n"
                 f"{filled_note}\n\n"
@@ -420,7 +466,8 @@ def main() -> None:
             )
 
             try:
-                response = chat.send_message(user_message)
+                print(last_action)
+                response = chat.send_message([screenshot_part, last_action, text_part])
                 raw = response.text.strip()
                 print(f"\n--- Step {step} ---")
                 print(f"Gemini: {raw}")
