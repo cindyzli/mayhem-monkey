@@ -1,14 +1,25 @@
 {
   "vulnerabilities": [
     {
+      "title": "Stored Cross-Site Scripting (XSS) in Blog Post Title",
+      "severity": "high",
+      "category": "Cross-Site Scripting",
+      "details": {
+        "description": "The application is vulnerable to stored XSS. By editing a blog post and injecting a malicious script into the 'title' field, the script is stored in the database and executed for any user viewing the post.",
+        "impact": "An attacker could steal session cookies, deface the website, or redirect users to malicious sites, compromising user accounts and the application's integrity.",
+        "recommendation": "Implement strict output encoding on all user-supplied data before rendering it in the browser. Specifically, encode HTML entities in the blog post title to prevent them from being interpreted as code.",
+        "codeSnippet": "1. Navigate to /blog\n2. Click 'Edit' on a post.\n3. Set the 'title' field to `<script>alert('xss')</script>`\n4. Submit the form. The script will execute."
+      }
+    },
+    {
       "title": "SQL Injection in Search Functionality",
       "severity": "critical",
       "category": "SQL Injection",
       "details": {
-        "description": "The search functionality on the /search page is vulnerable to SQL injection. Submitting a single quote (') as the search query caused the application to return a detailed database error page, confirming the vulnerability.",
-        "impact": "An attacker can execute arbitrary SQL queries to read, modify, or delete data from the database, potentially leading to a full compromise of the application and its data.",
-        "recommendation": "Implement parameterized queries (prepared statements) for all database interactions involving user-supplied input. This will ensure that user input is treated as data and not as executable SQL code.",
-        "codeSnippet": "POST /search\n\nquery='"
+        "description": "The search functionality is vulnerable to SQL injection. Submitting a single quote (') as the search query results in a database error, indicating that the input is not properly sanitized and is being directly included in an SQL query.",
+        "impact": "An attacker could bypass authentication, read sensitive data from the database, modify or delete data, and potentially gain full control over the database server, leading to a complete compromise of the application.",
+        "recommendation": "Use parameterized queries (prepared statements) to handle user input in all database queries. This practice separates the SQL code from the data, preventing malicious input from being executed by the database.",
+        "codeSnippet": "1. Navigate to /search\n2. Enter a single quote (') in the search box.\n3. Click 'Search'. The application will return a server error."
       }
     }
   ]
