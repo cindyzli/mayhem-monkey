@@ -1,169 +1,280 @@
+"""
+Gemini-driven chaos monkey router.
+
+Keeps a persistent browser open and lets Gemini decide what to do next.
+After each action Gemini narrates what it did via ElevenLabs TTS.
+The loop continues until Gemini declares it's finished or the user presses Ctrl-C.
+"""
+
 import json
 import os
 import sys
-from typing import Any, Dict
-
-# UPDATED: Import the new library and types
-from google import genai
-from google.genai import types
+import tempfile
+import subprocess
+import time
+from typing import Any, Dict, Optional
 
 from dotenv import load_dotenv
-from playwright.sync_api import sync_playwright
 
 load_dotenv()
 
-ALLOWED_ACTIONS = ["get_html", "click", "type_text"]
+# ---------------------------------------------------------------------------
+# Lazy imports for google.genai (require pip install google-genai)
+# ---------------------------------------------------------------------------
+from google import genai
+from google.genai import types
+from playwright.sync_api import sync_playwright
 
-SYSTEM_PROMPT = """You are a penetration tester for a website and you are trying to execute a SQL injection attack.
+# ---------------------------------------------------------------------------
+# TTS helper – speaks text out loud using ElevenLabs (same logic as voice/tts.py)
+# ---------------------------------------------------------------------------
+_elevenlabs_client = None
 
-You will be given the raw HTML for the page. You are able to perform the following 2 actions:
-click(url: str, selector: str, headed: bool = False)
-input_text(url: str, selector: str, text: str, submit: bool = False, headed: bool = False)
 
-When you want to take an action, respond with ONLY a JSON object in one of these formats:
-{"action":"click","selector":"..."}
-{"action":"type_text","selector":"...","text":"..."}
+def _get_elevenlabs():
+    global _elevenlabs_client
+    if _elevenlabs_client is None:
+        api_key = os.getenv("ELEVENLABS_API_KEY")
+        if not api_key:
+            return None
+        from elevenlabs import ElevenLabs
+        _elevenlabs_client = ElevenLabs(api_key=api_key)
+    return _elevenlabs_client
 
-Once you have reached the end of the task, output ONLY a JSON in the following format and replace "<attack_result>" with a description of the success:
-{"result": "<attack_result>"}
+
+def speak(text: str) -> None:
+    """Speak *text* aloud. Silently skips if ElevenLabs isn't configured."""
+    client = _get_elevenlabs()
+    if client is None:
+        print(f"[TTS unavailable] {text}")
+        return
+    try:
+        audio = client.text_to_speech.convert(
+            text=text,
+            voice_id="onwK4e9ZLuTAKqWW03F9",  # Daniel - Steady Broadcaster
+            output_format="mp3_44100_128",
+        )
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
+        for chunk in audio:
+            tmp.write(chunk)
+        tmp.close()
+        # Fire-and-forget playback so it doesn't block the loop
+        if sys.platform == "darwin":
+            subprocess.Popen(["afplay", tmp.name],
+                             stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+        else:
+            print(f"[TTS] {text}")
+    except Exception as exc:
+        print(f"[TTS error] {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Allowed actions – includes input_text as an alias for type_text
+# ---------------------------------------------------------------------------
+ALLOWED_ACTIONS = {"get_html", "click", "type_text", "input_text"}
+
+SYSTEM_PROMPT = """\
+You are a senior security QA engineer testing a web application that you own \
+and have explicit permission to test.
+
+Goal:
+1) Identify whether the application is vulnerable to common input-handling \
+issues (SQLi, reflected/stored XSS, auth/session flaws, broken access control).
+2) Provide a clear reproduction path and evidence for any finding.
+
+You can interact with the page using these actions:
+  click       – requires "selector"
+  type_text   – requires "selector" and "text"
+  get_html    – no extra fields
+
+Rules:
+- Only interact with the provided page URL.
+- Do NOT access other domains.
+- Prefer low-impact tests first.
+- If the page shows an error, capture it and report.
+
+*** OUTPUT FORMAT ***
+Return EXACTLY one JSON object per turn.  Include a short "thinking" field
+that explains your reasoning in 1-2 sentences (this will be spoken aloud).
+
+Action example:
+{"thinking":"I'll try a basic SQLi payload in the username field.","action":"type_text","selector":"input[name='username']","text":"' OR 1=1 --"}
+
+When you are finished testing, return:
+{"thinking":"Testing complete.","result":"summary of findings","evidence":"...","repro_steps":["..."],"risk":"...","recommendation":"..."}
 """
 
-
-def _prompt_for_input(label: str) -> str:
-    value = input(label).strip()
-    if not value:
-        raise ValueError(f"{label} is required")
-    return value
+MAX_CONSECUTIVE_ERRORS = 5          # give up after this many parse/action failures in a row
+INTER_STEP_DELAY = 1.5              # seconds between actions (avoids rate-limits)
 
 
 def _parse_response(raw: str) -> Dict[str, Any]:
-    # Some basic cleanup to find JSON
-    for candidate in [raw.splitlines()[-1], raw]:
-        candidate = candidate.strip()
-        if candidate.startswith("```"):
-            candidate = "\n".join(candidate.split("\n")[1:])
-        if candidate.endswith("```"):
-            candidate = candidate[: candidate.rfind("```")]
-        candidate = candidate.strip()
+    """Extract JSON from Gemini's response, tolerating markdown fences."""
+    text = raw.strip()
+    # Strip markdown code fences
+    if text.startswith("```"):
+        text = "\n".join(text.split("\n")[1:])
+    if text.endswith("```"):
+        text = text[: text.rfind("```")]
+    text = text.strip()
+
+    # Try the whole thing first, then the last line
+    for candidate in [text, text.splitlines()[-1].strip()]:
         try:
             data = json.loads(candidate)
-            # Check if it's a valid action or a result
-            if data.get("action") in ALLOWED_ACTIONS or "result" in data:
+            action = data.get("action")
+            # Normalise input_text -> type_text
+            if action == "input_text":
+                data["action"] = "type_text"
+                action = "type_text"
+            if action in ALLOWED_ACTIONS or "result" in data:
                 return data
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, IndexError):
             continue
-    # If we fall through, it's invalid
-    raise ValueError(f"Gemini did not return valid JSON. Raw response:\n{raw}")
+
+    raise ValueError(f"Could not parse Gemini response:\n{raw[:500]}")
 
 
-def _execute_action(page, action: Dict[str, Any]) -> str:
-    # Handle the 'result' case (task complete)
-    if "result" in action:
-        return f"Task complete: {action['result']}"
+def _execute_action(page, data: Dict[str, Any]) -> str:
+    """Run the action on the live Playwright page and return a feedback string."""
+    action = data.get("action")
 
-    name = action.get("action")
+    if action == "get_html":
+        html = page.content()
+        return f"Got HTML ({len(html)} chars)"
 
-    if name == "get_html":
-        return page.content()
-
-    elif name == "click":
-        selector = action.get("selector")
+    if action == "click":
+        selector = data.get("selector", "")
         if not selector:
-            return "Error: selector is required for click"
+            return "Error: 'selector' is required for click"
         try:
+            page.wait_for_selector(selector, timeout=5000)
             page.click(selector, timeout=5000)
             page.wait_for_load_state("domcontentloaded")
-            return f"Clicked '{selector}'. Page URL is now: {page.url}"
-        except Exception as e:
-            return f"Click failed: {e}"
+            return f"Clicked '{selector}'. URL is now: {page.url}"
+        except Exception as exc:
+            return f"Click failed on '{selector}': {exc}"
 
-    elif name == "type_text":
-        selector = action.get("selector")
-        text = action.get("text")
+    if action == "type_text":
+        selector = data.get("selector", "")
+        text = data.get("text")
         if not selector or text is None:
-            return "Error: selector and text are required for type_text"
+            return "Error: 'selector' and 'text' are required for type_text"
         try:
+            page.wait_for_selector(selector, timeout=5000)
             page.fill(selector, text)
-            return f"Typed '{text}' into '{selector}'. Page URL: {page.url}"
-        except Exception as e:
-            return f"Type failed: {e}"
+            # Auto-submit if Gemini asked
+            if data.get("submit"):
+                page.press(selector, "Enter")
+                page.wait_for_load_state("domcontentloaded")
+            return f"Typed into '{selector}'. URL: {page.url}"
+        except Exception as exc:
+            return f"Type failed on '{selector}': {exc}"
 
-    return f"Unknown action: {name}"
+    return f"Unknown action '{action}'"
 
 
 def main() -> None:
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        raise RuntimeError("GEMINI_API_KEY is not set")
+        raise RuntimeError("GEMINI_API_KEY is not set in .env")
 
-    url = _prompt_for_input("Enter target URL: ")
+    url = input("Enter target URL: ").strip()
+    if not url:
+        raise SystemExit("URL is required")
     if not url.startswith(("http://", "https://")):
         url = f"https://{url}"
 
-    # --- UPDATED GENAI SETUP ---
-    # 1. Initialize the Client
+    # --- Gemini chat session ---
     client = genai.Client(api_key=api_key)
-
-    # 2. Create the chat session with configuration
     chat = client.chats.create(
         model="gemini-2.0-flash",
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_PROMPT,
-            temperature=0.7, # Optional: Adds a bit of creativity for attacks
-        )
+            temperature=0.7,
+        ),
     )
-    # ---------------------------
+
+    speak(f"Starting chaos test on {url}")
 
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=False)
         page = browser.new_page()
         print(f"Navigating to {url} ...")
         page.goto(url, wait_until="domcontentloaded")
-        print(f"Ready. Page loaded: {page.url}\n")
+        print(f"Page loaded: {page.url}\n")
+
+        consecutive_errors = 0
+        step = 0
 
         while True:
+            step += 1
             html = page.content()
-            
-            # Simple prompt construction
+
             user_message = (
                 f"Current page URL: {page.url}\n"
-                f"HTML snippet (first 20000 chars): {html[:20000]}\n\n" # Truncating slightly to be safe
-                "What is the next action? Return ONLY JSON."
+                f"HTML (first 15000 chars):\n{html[:15000]}\n\n"
+                "What is the next action? Return ONLY the JSON object."
             )
 
             try:
-                # 3. Send message using the new chat object
                 response = chat.send_message(user_message)
-                raw = response.text
-                print(f"Gemini response: {raw}")
+                raw = response.text.strip()
+                print(f"\n--- Step {step} ---")
+                print(f"Gemini: {raw}")
 
                 parsed = _parse_response(raw)
+                consecutive_errors = 0  # reset on success
 
-                # Check if the agent says it's done
+                # Narrate the thinking
+                thinking = parsed.get("thinking", "")
+                if thinking:
+                    print(f"Thinking: {thinking}")
+                    speak(thinking)
+
+                # Finished?
                 if "result" in parsed:
-                    print(f"\nTask complete. Result: {parsed['result']}")
+                    summary = parsed["result"]
+                    print(f"\nDone! {summary}")
+                    speak(f"Testing complete. {summary}")
                     break
 
-                print(f"Executing Action: {parsed}")
-                result_feedback = _execute_action(page, parsed)
-                print(f"Action Result: {result_feedback}\n")
+                # Execute
+                feedback = _execute_action(page, parsed)
+                print(f"Result: {feedback}")
 
-                # Note: In a real chat loop, we don't manually 'feed back' the result 
-                # immediately unless we prompt again. The loop handles the next prompt.
-                # If you want to force the context update immediately without a new user prompt:
-                # You rely on the next loop iteration to send the new state (HTML).
+                # Feed the result back to Gemini so it knows what happened
+                chat.send_message(f"Action result: {feedback}")
 
-            except Exception as e:
-                print(f"Error in loop: {e}\n", file=sys.stderr)
-                # Break to avoid infinite error loops during testing
-                break
+            except Exception as exc:
+                consecutive_errors += 1
+                print(f"[Step {step}] Error ({consecutive_errors}/{MAX_CONSECUTIVE_ERRORS}): {exc}",
+                      file=sys.stderr)
+                if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                    speak("Too many errors in a row. Stopping.")
+                    print("Too many consecutive errors — stopping.", file=sys.stderr)
+                    break
+                # Tell Gemini about the error so it can adapt
+                try:
+                    chat.send_message(
+                        f"The previous response caused an error: {exc}. "
+                        "Please try a different approach. Return ONLY JSON."
+                    )
+                except Exception:
+                    pass
 
+            time.sleep(INTER_STEP_DELAY)
+
+        browser.close()
     print("Browser closed.")
 
 
 if __name__ == "__main__":
     try:
         main()
+    except KeyboardInterrupt:
+        print("\nInterrupted by user.")
     except Exception as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        print(f"Fatal: {exc}", file=sys.stderr)
         sys.exit(1)

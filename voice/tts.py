@@ -12,7 +12,7 @@ from elevenlabs import ElevenLabs
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="ElevenLabs text-to-speech")
     parser.add_argument("--text", help="Text to synthesize")
-    parser.add_argument("--voice", default="Daniel", help="Voice name or ID")
+    parser.add_argument("--voice", default="onwK4e9ZLuTAKqWW03F9", help="Voice ID (default: Daniel)")
     parser.add_argument(
         "--out",
         default="tts_output.mp3",
